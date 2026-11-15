@@ -17,7 +17,12 @@ import tempfile
 
 REQUIRED = {"lib/index.js", "lib/client.js", "package.json", "cordis.patch.yml", "NOTICE", "README.md", "LICENSE"}
 ROOT_FILES = {"package.json", "cordis.patch.yml", "NOTICE", "README.md", "LICENSE", "screenshots.json"}
-RELEASE_FILES = REQUIRED | {"docs/validation-2026-11-14-standalone.md", "docs/preview/reference-menu-2026-11-14.png", "screenshots.json"}
+RELEASE_COMMON = REQUIRED | {"docs/validation-2026-11-14-standalone.md", "screenshots.json"}
+RELEASE_LAYOUTS = (
+    RELEASE_COMMON | {"docs/preview/reference-menu-2026-11-14.png"},
+    RELEASE_COMMON | {"docs/preview/reference-menu.png", "docs/preview/reference-content.png"},
+)
+RELEASE_FILES = set().union(*RELEASE_LAYOUTS)
 EXTENSIONS = {".js", ".mjs", ".cjs", ".ts", ".map", ".json", ".md", ".txt", ".yml", ".yaml", ".svg", ".css", ".html", ".png", ".jpg", ".jpeg", ".webp"}
 SECRET_PATTERNS = [
     rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
@@ -111,7 +116,7 @@ def check_manifest(root):
     require(manifest.get("private") is True, "unexpected-package-publication-mode")
     published = manifest.get("files")
     require(isinstance(published, list) and all(isinstance(item, str) for item in published), "invalid-files-manifest")
-    require(len(published) == len(set(published)) and set(published) == RELEASE_FILES - {"package.json"}, "unexpected-files-manifest")
+    require(len(published) == len(set(published)) and any(set(published) == layout - {"package.json"} for layout in RELEASE_LAYOUTS), "unexpected-files-manifest")
     for relative in published:
         existing_target(root, "./" + relative)
     for field in ("dependencies", "optionalDependencies", "peerDependencies", "bundledDependencies", "bundleDependencies"):
@@ -173,6 +178,7 @@ def verify(archive, node):
             require(total <= 256 * 1024 * 1024, "archive-size-limit")
             regulars = {relative for member, _, relative in validated if member.isfile()}
             require(REQUIRED <= regulars, "required-payload-missing")
+            require(any(regulars == layout for layout in RELEASE_LAYOUTS), "unexpected-release-layout")
             for member, target, _ in validated:
                 if member.isdir():
                     target.mkdir(parents=True, exist_ok=True)

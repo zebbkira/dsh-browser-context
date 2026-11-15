@@ -12,7 +12,7 @@
   "engines": { "dsh": ">=0.2.2-rc.1 <0.3.0" },
   "main": "./lib/index.js",
   "exports": { ".": "./lib/index.js", "./client": "./lib/client.js", "./package.json": "./package.json" },
-  "files": ["lib/index.js", "lib/client.js", "cordis.patch.yml", "docs/validation-2026-11-14-standalone.md", "docs/preview/reference-menu-2026-11-14.png", "screenshots.json", "README.md", "LICENSE", "NOTICE"],
+  "files": ["lib/index.js", "lib/client.js", "cordis.patch.yml", "docs/validation-2026-11-14-standalone.md", "docs/preview/reference-menu.png", "docs/preview/reference-content.png", "screenshots.json", "README.md", "LICENSE", "NOTICE"],
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-sidebar-right", "@deepseek-ai/dsh-api-workspace-controller", "@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-ui-settings"] }

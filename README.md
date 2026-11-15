@@ -1,7 +1,9 @@
 <h1 align="center">dsh-browser-context</h1>
 <p align="center">把网页选区、文章、视频信息与可访问字幕或视口截图显式加入当前 DSH 草稿；保留原草稿，不自动发送</p>
 
-![普通网页引用菜单与手动输入框示例](docs/preview/reference-menu-2026-11-14.png)
+![引用菜单与入稿成功提示](docs/preview/reference-menu.png)
+
+![展开后的文章引用内容示例](docs/preview/reference-content.png)
 
 ## 使用
 
