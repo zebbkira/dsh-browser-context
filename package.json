@@ -1,0 +1,26 @@
+{
+  "name": "dsh-browser-context",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "DSH Desktop reference browser for articles, WeCom selections, accessible Bilibili subtitles and screenshots, with compact source quotes",
+  "repository": { "type": "git", "url": "https://github.com/zebbkira/dsh-browser-context.git" },
+  "homepage": "https://github.com/zebbkira/dsh-browser-context#readme",
+  "bugs": { "url": "https://github.com/zebbkira/dsh-browser-context/issues" },
+  "keywords": ["dsh-plugin", "deepseek-harness", "browser", "web-clipper", "wecom", "bilibili"],
+  "license": "MIT",
+  "engines": { "dsh": ">=0.2.2-rc.1 <0.3.0" },
+  "main": "./lib/index.js",
+  "exports": { ".": "./lib/index.js", "./client": "./lib/client.js", "./package.json": "./package.json" },
+  "files": ["lib/index.js", "lib/client.js", "cordis.patch.yml", "docs/validation-2026-11-14-standalone.md", "docs/preview/reference-menu-2026-11-14.png", "screenshots.json", "README.md", "LICENSE", "NOTICE"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-sidebar-right", "@deepseek-ai/dsh-api-workspace-controller", "@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-ui-settings"] }
+  },
+  "devDependencies": { "defuddle": "0.19.6" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/test.mjs",
+    "check": "node scripts/check.mjs"
+  }
+}
