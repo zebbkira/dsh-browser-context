@@ -1,0 +1,21 @@
+{
+  "extends": "../tsconfig.base.client.json",
+  "compilerOptions": { "noEmit": true, "composite": false, "incremental": false, "skipLibCheck": true },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "references": [
+    { "path": "../vendor/cordis" },
+    { "path": "../packages/api/session-controller/tsconfig.client.json" },
+    { "path": "../packages/core/session" },
+    { "path": "../packages/client/locale/tsconfig.client.json" },
+    { "path": "../packages/client/store" },
+    { "path": "../packages/client/ui-primitives" },
+    { "path": "../packages/client/ui-renderer" },
+    { "path": "../packages/client/ui-session" },
+    { "path": "../packages/client/ui-settings/tsconfig.client.json" },
+    { "path": "../packages/client/ui-slots" },
+    { "path": "../packages/api/workspace-controller/tsconfig.client.json" },
+    { "path": "../packages/client/ui-sidebar-right" },
+    { "path": "../packages/client/ui-dockkit" },
+    { "path": "../packages/client/ui-conversation/tsconfig.client.json" }
+  ]
+}

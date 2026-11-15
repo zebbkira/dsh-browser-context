@@ -1,0 +1,26 @@
+name: Verify prebuilt package
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pack committed runtime artifacts without install hooks
+        run: |
+          mkdir -p dist
+          npm pack --ignore-scripts --pack-destination dist
+      - name: Verify archive and cold module imports
+        run: python scripts/verify-package.py dist/dsh-browser-context-0.2.0.tgz --node node
