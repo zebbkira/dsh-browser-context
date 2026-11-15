@@ -47,7 +47,7 @@
 
 草稿不声明 `icon`，市场回退到仓库所有者头像。日后添加时，只能使用 GitHub 托管的 `png`、`jpg`、`jpeg` 或 `webp` 位图；目录卡片拒绝 SVG 和第三方图床，约 96px 显示，适合方图。
 
-[screenshots.json](../screenshots.json) 在本仓库包清单旁声明一张相对路径预览。上游允许 1–8 张，接受路径数组或带 `screenshots` 字段的对象；相对路径不能以 `/` 开头、不能含 `..` 或跳出插件目录。绝对链接必须是 GitHub 托管的 HTTPS 图片，不使用第三方图床。图片须检查敏感信息；不声明时市场可从 README 抽图。
+[screenshots.json](../screenshots.json) 在本仓库包清单旁声明两张相对路径预览。上游允许 1–8 张，接受路径数组或带 `screenshots` 字段的对象；相对路径不能以 `/` 开头、不能含 `..` 或跳出插件目录。绝对链接必须是 GitHub 托管的 HTTPS 图片，不使用第三方图床。图片须检查敏感信息；不声明时市场可从 README 抽图。
 
 后续预览更新提交到自家仓库即可，由目录后续构建收集；不要向上游旧的 `data/screenshots.json` 添加新键。
 
