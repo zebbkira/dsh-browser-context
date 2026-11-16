@@ -23,7 +23,7 @@
 
 本次预发布使用 `dsh-browser-context-0.2.0.tgz`。包包含预构建 Host 与 Client 产物，运行时依赖已内联，无运行时 npm 依赖及安装脚本，安装者不需要本地编译。Git 仓库同样携带 `lib` 且无 `prepare` 脚本，不将其描述为仅能通过 tarball 安装。
 
-安装入口和配置说明见 [README 的安装章节](README.md#安装预构建包)。上传后的固定资产地址为：
+安装入口和配置说明见 [README 的安装章节](README.md#安装)。上传后的固定资产地址为：
 
 `https://github.com/zebbkira/dsh-browser-context/releases/download/v0.2.0/dsh-browser-context-0.2.0.tgz`
 
