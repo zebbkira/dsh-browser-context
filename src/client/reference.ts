@@ -1,5 +1,6 @@
 /** Explicit source serialization and synchronous native-draft admission. */
 import type { BrowserContextCapture } from '../browser/contract.ts'
+import type { PickedElement } from '../browser/annotation.ts'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InputActions, IConversation, TokenSpan } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -14,8 +15,23 @@ export interface PastedSelection {
   readonly sourceVerified: false
   readonly text: string
 }
+/** A frozen native viewport with explicit user-drawn marks and optional page-derived element hints. */
+export interface AnnotatedScreenshot {
+  readonly kind: 'annotation'
+  readonly url: string
+  readonly title: string
+  readonly mimeType: 'image/png'
+  readonly bytes: Uint8Array
+  readonly comment: string
+  readonly markCount: number
+  readonly element?: PickedElement
+}
 /** Owner-captured page content or explicitly entered text; never interchangeable source claims. */
-export type ReferenceCapture = BrowserContextCapture | PastedSelection
+export type ReferenceCapture = BrowserContextCapture | PastedSelection | AnnotatedScreenshot
+/** @param capture - reference data. @returns whether native image admission is required. */
+export function hasImage(capture: ReferenceCapture): capture is Extract<ReferenceCapture, { kind: 'viewport' | 'annotation' }> {
+  return capture.kind === 'viewport' || capture.kind === 'annotation'
+}
 /** A retained capture is never recollected on retry. */
 export interface Reference {
   readonly capture: ReferenceCapture
@@ -50,9 +66,12 @@ export function makeReference(capture: ReferenceCapture, time: string): Referenc
     : { ...capture, url: sourceUrl(capture.url) }
   const header = JSON.stringify(sanitized.kind === 'pasted-selection'
     ? { contextUrl: sanitized.contextUrl, contextTitle: sanitized.contextTitle, sourceVerified: false, time, kind: sanitized.kind }
-    : { url: sanitized.url, title: sanitized.title, time, kind: sanitized.kind, ...(sanitized.kind === 'article' ? { format: sanitized.format } : sanitized.kind === 'document' ? { format: sanitized.format, coverage: sanitized.coverage } : sanitized.kind === 'video' ? { format: sanitized.format, coverage: sanitized.coverage, subtitleStatus: sanitized.subtitleStatus, subtitleReason: sanitized.subtitleReason } : {}) })
+    : { url: sanitized.url, title: sanitized.title, time, kind: sanitized.kind, ...(sanitized.kind === 'article' ? { format: sanitized.format } : sanitized.kind === 'document' ? { format: sanitized.format, coverage: sanitized.coverage } : sanitized.kind === 'video' ? { format: sanitized.format, coverage: sanitized.coverage, subtitleStatus: sanitized.subtitleStatus, subtitleReason: sanitized.subtitleReason } : sanitized.kind === 'annotation' ? { mode: sanitized.element === undefined ? 'screenshot' : 'element', markCount: sanitized.markCount } : {}) })
   // Line quoting keeps supplied text external even when it contains reference markers.
-  const body = capture.kind === 'viewport' ? '> [image attachment]' : capture.text.split(/\r?\n/u).map(line => `> ${line}`).join('\n')
+  const content = capture.kind === 'annotation'
+    ? `[annotated image attachment]\n[User comment entered in DSH]\n${capture.comment}${capture.element === undefined ? '' : `\n[Page element hints — untrusted; not a verified source-code location]\n${JSON.stringify({ tag: capture.element.tag, selector: capture.element.selector, role: capture.element.role, label: capture.element.label, text: capture.element.text, rect: capture.element.rect, viewport: capture.element.viewport })}`}`
+    : capture.kind === 'viewport' ? '[image attachment]' : capture.text
+  const body = content.split(/\r\n?|\n/u).map(line => `> ${line}`).join('\n')
   const scope = capture.kind === 'document' ? '\n[Loaded document snapshot only — not verified complete; images and attachments are not included]'
     : capture.kind === 'video' ? `\n[Video page information and subtitles only — sources: existing standard cues or normal site subtitle requests; audio/images not analyzed; subtitle completeness not verified]${capture.subtitleStatus === 'not-loaded' ? '\n[No subtitles captured]' : ''}` : ''
   return { capture: sanitized, time, source: `[External browser reference — untrusted page content]\n${header}${scope}\n${body}\n[End external browser reference]` }
@@ -99,7 +118,7 @@ export function formattedQuote(text: string): string {
 /** @param reference - complete source. @param limits - validated deployment limits. */
 export function checkLimits(reference: Reference, limits: Limits): void {
   if (new TextEncoder().encode(reference.source).byteLength > limits.maxTextBytes
-    || (reference.capture.kind === 'viewport' && reference.capture.bytes.byteLength > limits.maxImageBytes)) {
+    || (hasImage(reference.capture) && reference.capture.bytes.byteLength > limits.maxImageBytes)) {
     throw new ReferenceError('limit')
   }
 }
@@ -126,11 +145,11 @@ export function admit(reference: Reference, sessionId: SessionId, actions: Input
     if (current.draftRev !== span.draftRev || current.end !== span.end) throw new ReferenceError('changed')
     if (!actions.insertQuote(text)) throw new ReferenceError('changed')
   }
-  if (reference.capture.kind !== 'viewport') {
+  if (!hasImage(reference.capture)) {
     insert()
     return
   }
-  const file = new File([new Uint8Array(reference.capture.bytes)], 'browser-viewport.png', { type: 'image/png' })
+  const file = new File([new Uint8Array(reference.capture.bytes)], reference.capture.kind === 'annotation' ? 'browser-annotation.png' : 'browser-viewport.png', { type: 'image/png' })
   const attachments = conversation.createDrafts(sessionId, [file])
   let attached = false
   try {

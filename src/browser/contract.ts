@@ -1,5 +1,6 @@
 /** Package-owned capture API; independent from optional or modified stock Browser APIs. */
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { ElementPickLimits, PickedElementCapture } from './annotation.ts'
 
 /** A subtitle request can fail without invalidating the separately captured video page information. */
 export type VideoSubtitleReason = 'not-available' | 'not-provided' | 'login-required' | 'access-denied' | 'request-failed' | 'timeout'
@@ -28,7 +29,7 @@ export interface BrowserContextCaptureLimits { readonly maxBytes: number; readon
 
 /** Stable operation failures, without page data in their messages. */
 export type BrowserContextCaptureErrorCode = 'unsupported' | 'empty-selection' | 'no-article' | 'no-document' | 'no-video' | 'changed'
-  | 'too-large' | 'closed' | 'unavailable' | 'invalid-limit' | 'copy-denied' | 'melo-unavailable' | 'melo-range-unavailable' | 'failed'
+  | 'too-large' | 'closed' | 'cancelled' | 'unavailable' | 'invalid-limit' | 'copy-denied' | 'melo-unavailable' | 'melo-range-unavailable' | 'failed'
 
 /** Consumers handle failures by code without importing an implementation class. */
 export interface BrowserContextCaptureError extends Error { readonly code: BrowserContextCaptureErrorCode }
@@ -47,6 +48,8 @@ export interface BrowserActionsOwnerProps {
   readonly source?: BrowserContextSource | undefined
   /** @param kind - finite semantic capture. @param limits - complete output budget. @returns transient capture, or a typed rejection. */
   readonly capture: (kind: BrowserContextCaptureKind, limits: BrowserContextCaptureLimits) => Promise<BrowserContextCapture>
+  /** Explicit element selection, cancelled by the caller or page lifetime; never exports a native guest. */
+  readonly pickElement?: (limits: ElementPickLimits, signal: AbortSignal, instruction: string) => Promise<PickedElementCapture>
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {

@@ -34,6 +34,7 @@ export interface BrowserInjected {
   /** @param tabId - owning tab. */
   reload(tabId: TabId): void
   readonly capture: (tabId: TabId, ...request: Parameters<BrowserActionsOwnerProps['capture']>) => ReturnType<BrowserActionsOwnerProps['capture']>
+  readonly pickElement: (tabId: TabId, ...request: Parameters<NonNullable<BrowserActionsOwnerProps['pickElement']>>) => ReturnType<NonNullable<BrowserActionsOwnerProps['pickElement']>>
 }
 
 declare module '@deepseek-ai/dsh-client-ui-sidebar-right/client' {
@@ -81,6 +82,10 @@ export function registerReferenceBrowser(ctx: Context): void {
       capture: (tabId, kind, limits) => {
         const page = pages.get(tabId)
         return disposed || page === undefined ? Promise.reject(new CaptureError('closed')) : page.capture(kind, limits)
+      },
+      pickElement: (tabId, limits, signal, instruction) => {
+        const page = pages.get(tabId)
+        return disposed || page === undefined ? Promise.reject(new CaptureError('closed')) : page.pickElement(limits, signal, instruction)
       },
     }
     sessions.set(sessionId, { pages, face })

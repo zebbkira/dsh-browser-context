@@ -18,7 +18,7 @@ export type ReferenceBrowserBodyProps = PropsRuntime<'sidebar.right.pane.tab'> &
 
 /** @param props - own native page state and finite actions. @returns independent reference browser. */
 export function ReferenceBrowserBody(props: ReferenceBrowserBodyProps): ReactNode {
-  const { useTabInfo, useReferenceBrowserState, mount, load, reload, capture, renderSlot, t } = props
+  const { useTabInfo, useReferenceBrowserState, mount, load, reload, capture, pickElement, renderSlot, t } = props
   const { tab } = useTabInfo()
   const viewportId = useId()
   const state = useReferenceBrowserState(tab.id) ?? EMPTY_STATE
@@ -34,6 +34,10 @@ export function ReferenceBrowserBody(props: ReferenceBrowserBodyProps): ReactNod
     if (tab.signal.aborted) return Promise.reject(new CaptureError('closed'))
     return capture(tab.id, kind, limits)
   }, [capture, tab.id, tab.signal])
+  const pickTab = useCallback<NonNullable<BrowserActionsOwnerProps['pickElement']>>((limits, signal, instruction) => {
+    if (tab.signal.aborted) return Promise.reject(new CaptureError('closed'))
+    return pickElement(tab.id, limits, AbortSignal.any([signal, tab.signal]), instruction)
+  }, [pickElement, tab.id, tab.signal])
   const submit = (event: FormEvent): void => { event.preventDefault(); load(tab.id, draft) }
   return <div className={css.root}>
     <form className={css.toolbar} onSubmit={submit}>
@@ -42,7 +46,7 @@ export function ReferenceBrowserBody(props: ReferenceBrowserBodyProps): ReactNod
       <button className={css.tool} type="submit" aria-label={t('go')} title={t('go')}><IconLinkOutlineRegular /></button>
       <button className={css.tool} type="button" aria-label={t('reload')} title={t('reload')}
         disabled={state.url === undefined || state.error === 'desktop-only'} onClick={() => { reload(tab.id) }}><IconRefreshOutlineRegular /></button>
-      {renderSlot('browserContext.actions', { available: state.available, capture: captureTab,
+      {renderSlot('browserContext.actions', { available: state.available, capture: captureTab, pickElement: pickTab,
         source: state.available && state.url !== undefined
           ? { tabId: tab.id, url: state.url, title: state.title, generation: state.generation } : undefined })}
     </form>
