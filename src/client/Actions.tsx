@@ -2,12 +2,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Menu, MenuItemButton, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import type { BrowserContextCaptureKind, BrowserContextCaptureLimits } from '../browser/contract.ts'
+import type { BrowserContextCapture, BrowserContextSource, BrowserContextCaptureKind, BrowserContextCaptureLimits } from '../browser/contract.ts'
+import type { PickedElement } from '../browser/annotation.ts'
+import type { TokenSpan } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { AnnotationEditor } from './AnnotationEditor.tsx'
+import type { AnnotationEditorResult } from './AnnotationEditor.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { Limits, Reference } from './reference.ts'
 import { limitsAvailable } from './config.ts'
 import { errorDetails } from './error-details.ts'
-import { insertionSpan, captureFailure, imagePreview, makeReference, ReferenceError } from './reference.ts'
+import { insertionSpan, captureFailure, imagePreview, makeReference, hasImage, ReferenceError } from './reference.ts'
 import type { RecoveryStore } from './store.ts'
 import type { Injected } from './index.ts'
 import css from './Actions.module.css'
@@ -17,9 +21,20 @@ import { isBilibiliVideo } from '../readers/bilibili.ts'
 export type Props = PropsRuntime<'browserContext.actions'> & PropsLocale<'browserContext'>
   & PropsStore<RecoveryStore> & InjectFace<Injected>
 
+interface AnnotationDraft {
+  sessionId: Props['sessionId']
+  inputActions: Props['inputActions']
+  source: BrowserContextSource
+  image: Extract<BrowserContextCapture, { kind: 'viewport' }>
+  element: PickedElement | undefined
+  span: TokenSpan
+  time: string
+  limits: Limits
+}
+
 /** @param props - session-bound action seat and capture capability. @returns a compact host menu and retained recovery. */
 export function BrowserActions(props: Props) {
-  const { available, capture, source, sessionId, inputActions, useStore, actions, t, useConfig, readLimits, commit } = props
+  const { available, capture, pickElement, source, sessionId, inputActions, useStore, actions, t, useConfig, readLimits, commit } = props
   const configReady = limitsAvailable(useConfig(state => state))
   const { recovery, notice, paste: retainedPaste } = useStore(state => state)
   const paste = retainedPaste?.sessionId === sessionId ? retainedPaste : undefined
@@ -29,11 +44,16 @@ export function BrowserActions(props: Props) {
   const [failureDetails, setFailureDetails] = useState<{ sessionId: Props['sessionId']; text: string }>()
   const [pendingView, setPendingView] = useState<{ sessionId: Props['sessionId']; controller: AbortController }>()
   const busy = pendingView?.sessionId === sessionId && !pendingView.controller.signal.aborted
+  const [annotation, setAnnotation] = useState<AnnotationDraft>()
+  const [picking, setPicking] = useState(false)
+  const annotationView = annotation?.sessionId === sessionId && annotation.inputActions === inputActions ? annotation : undefined
+  const annotationChanged = annotationView !== undefined && (source === undefined || source.tabId !== annotationView.source.tabId
+    || source.generation !== annotationView.source.generation || source.url !== annotationView.source.url)
   const operation = useRef<AbortController | undefined>(undefined)
   const live = useRef(props)
   live.current = props
   useEffect(() => () => { operation.current?.abort() }, [sessionId, inputActions])
-  const preview = useMemo(() => recovery?.capture.kind === 'viewport' ? imagePreview(recovery.capture.bytes) : undefined, [recovery])
+  const preview = useMemo(() => recovery !== undefined && hasImage(recovery.capture) ? imagePreview(recovery.capture.bytes) : undefined, [recovery])
 
   const add = (reference: Reference, span = insertionSpan(inputActions), operationLimits?: Limits) => {
     setFailureDetails(undefined)
@@ -112,12 +132,83 @@ export function BrowserActions(props: Props) {
         setOpen(true)
       }
     } finally {
-      if (operation.current === pending) operation.current = undefined
-      if (!pending.signal.aborted) setPendingView(undefined)
+      if (operation.current === pending) {
+        operation.current = undefined
+        if (!pending.signal.aborted) setPendingView(undefined)
+      }
     }
   }
 
+  const beginAnnotation = async (mode: 'screenshot' | 'element') => {
+    if (source === undefined || operation.current !== undefined && !operation.current.signal.aborted) return
+    const pending = new AbortController()
+    operation.current = pending
+    setPendingView({ sessionId, controller: pending })
+    setPicking(mode === 'element')
+    setOpen(false)
+    setFailureDetails(undefined)
+    const span = insertionSpan(inputActions)
+    const time = new Date().toISOString()
+    let limits: Limits | undefined
+    try {
+      limits = readLimits()
+      let image: Extract<BrowserContextCapture, { kind: 'viewport' }>
+      let element: PickedElement | undefined
+      if (mode === 'element') {
+        if (pickElement === undefined) throw new ReferenceError('unavailable')
+        const picked = await pickElement(limits, pending.signal, t('pickInstruction'))
+        image = picked.image
+        element = picked.element
+      } else {
+        const captured = await capture('viewport', { maxBytes: limits.maxImageBytes })
+        if (captured.kind !== 'viewport') throw new ReferenceError('capture')
+        image = captured
+      }
+      if (pending.signal.aborted || live.current.sessionId !== sessionId || live.current.inputActions !== inputActions) return
+      const current = live.current.source
+      if (current === undefined || current.tabId !== source.tabId || current.generation !== source.generation || current.url !== source.url) {
+        actions.retain(makeReference(image, time))
+        throw new ReferenceError('changed')
+      }
+      setAnnotation({ sessionId, inputActions, source: { ...source }, image, element, span, time, limits })
+    } catch (error) {
+      if (!pending.signal.aborted && live.current.sessionId === sessionId && live.current.inputActions === inputActions) {
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'cancelled') return
+        actions.report(error instanceof ReferenceError ? error.code : captureFailure(error))
+        if (limits !== undefined) setFailureDetails({ sessionId, text: errorDetails(error, limits.maxTextBytes) })
+        setOpen(true)
+      }
+    } finally {
+      if (operation.current === pending) {
+        operation.current = undefined
+        if (live.current.sessionId === sessionId) { setPicking(false); setPendingView(undefined) }
+      }
+    }
+  }
+  const saveAnnotation = (result: AnnotationEditorResult) => {
+    if (annotationView === undefined || live.current.sessionId !== annotationView.sessionId
+      || live.current.inputActions !== annotationView.inputActions || annotationChanged) return
+    const reference = makeReference({ ...annotationView.image, kind: 'annotation', bytes: result.bytes,
+      comment: result.comment, markCount: result.markCount,
+      ...(annotationView.element === undefined ? {} : { element: annotationView.element }) }, annotationView.time)
+    add(reference, annotationView.span, annotationView.limits)
+    setAnnotation(undefined)
+  }
+
   return <div className={css.root}>
+    {busy && picking && <Tooltip label={t('picking')} portal>
+      <Button size="sm" variant="ghost" onClick={() => { operation.current?.abort(); setPendingView(undefined); setPicking(false) }}>{t('cancelPick')}</Button>
+    </Tooltip>}
+    {annotationView !== undefined && <AnnotationEditor key={annotationView.time} image={annotationView.image}
+      {...(annotationView.element === undefined ? {} : { element: annotationView.element })}
+      maxTextBytes={annotationView.limits.maxTextBytes} maxImageBytes={annotationView.limits.maxImageBytes}
+      changed={annotationChanged} onSave={saveAnnotation} onCancel={() => setAnnotation(undefined)}
+      labels={{ title: t('annotationTitle'), close: t('annotationClose'), rectangle: t('annotationRectangle'), ellipse: t('annotationEllipse'),
+        arrow: t('annotationArrow'), pen: t('annotationPen'), tools: t('annotationTools'), undo: t('annotationUndo'), clear: t('annotationClear'),
+        comment: t('annotationComment'), canvas: t('annotationCanvas'), cancel: t('annotationCancel'), save: t('annotationSave'),
+        loading: t('annotationLoading'), saving: t('annotationSaving'), decodeError: t('annotationDecodeError'), exportError: t('annotationExportError'),
+        textLimit: t('annotationTextLimit'), imageLimit: t('annotationImageLimit'), drawingLimit: t('annotationDrawingLimit'), changed: t('annotationChanged') }} />}
+
     <Menu open={open} onClose={() => setOpen(false)} portal align="end" compact
       anchor={<Tooltip label={t(configReady ? 'unavailable' : 'config')} disabled={available && configReady} portal side="bottom">
         <span tabIndex={!available || !configReady ? 0 : undefined} aria-label={!available || !configReady ? t(configReady ? 'unavailable' : 'config') : undefined}>
@@ -129,6 +220,8 @@ export function BrowserActions(props: Props) {
       <MenuItemButton disabled={!available || !configReady || busy} onSelect={() => { void begin('article') }}>{t(source !== undefined && isWecomDocument(source.url) ? 'document' : source !== undefined && isBilibiliVideo(source.url) ? 'video' : 'article')}</MenuItemButton>
       <MenuItemButton disabled={!available || !configReady || busy} onSelect={openPaste}>{t('paste')}</MenuItemButton>
       <MenuItemButton disabled={!available || !configReady || busy} onSelect={() => { void begin('viewport') }}>{t('viewport')}</MenuItemButton>
+      <MenuItemButton disabled={!available || !configReady || busy} onSelect={() => { void beginAnnotation('screenshot') }}>{t('annotate')}</MenuItemButton>
+      <MenuItemButton disabled={!available || !configReady || busy || pickElement === undefined} onSelect={() => { void beginAnnotation('element') }}>{t('pickAnnotate')}</MenuItemButton>
     {paste !== undefined && <div className={css.recovery}>
       <span className={css.notice}>{t('pasteHelp')}</span>
       <textarea className={css.source} aria-label={t('pasteInput')} value={paste.text}

@@ -8,6 +8,8 @@ import { decodeWecomSelectionReply, wecomSelectionScript } from '../readers/weco
 import { articleScript } from '../readers/article.ts'
 import { bilibiliVideoScript, decodeBilibiliReply, isBilibiliVideo } from '../readers/bilibili.ts'
 import { decodeWecomReply, isWecomDocument, wecomDocumentScript, wecomMinimumReplyBytes } from '../readers/wecom.ts'
+import type { ElementPickLimits, PickedElementCapture } from './annotation.ts'
+import { decodeElementPickerReply, elementPickerCancelScript, elementPickerCheckScript, elementPickerScript } from '../readers/element-picker.ts'
 import css from './View.module.css'
 
 /** Reactive state of this plugin's own guest; no stock Browser controller or DOM is consulted. */
@@ -46,6 +48,8 @@ export class NativePage {
   private readonly releases = new Set<Promise<void>>()
   private pending: string | undefined
   private ready = false
+  private pickerCancel: (() => void) | undefined
+  private pickerDone: Promise<void> | undefined
   private readonly ended = (): void => { void this.dispose() }
   private openRequested: (url: string) => void = () => {}
 
@@ -184,13 +188,107 @@ export class NativePage {
     }
   }
 
+  /**
+   * Pick one element with input interception; earlier page-owned window capture handlers can still run.
+   * Cancellation removes owned overlays and listeners; unreachable documents do not block disposal.
+   * @param limits - complete reply JSON and native image budgets, without truncation.
+   * @param signal - caller cancellation; rejects with cancelled and discards partial output.
+   * @param instruction - localized, plain-text picker instruction.
+   * @returns native viewport image and hints from the same node, document and viewport.
+   * @throws CaptureError on cancellation, concurrent use, navigation, closure or invalid guest output; errors contain no page data.
+   */
+  public async pickElement(limits: ElementPickLimits, signal: AbortSignal, instruction: string): Promise<PickedElementCapture> {
+    validateLimits({ maxBytes: limits.maxTextBytes })
+    validateLimits({ maxBytes: limits.maxImageBytes })
+    if (this.lifetime.signal.aborted) throw new CaptureError('closed')
+    if (signal.aborted) throw new CaptureError('cancelled')
+    if (this.bridge === undefined) throw new CaptureError('unsupported')
+    if (this.pickerCancel !== undefined) throw new CaptureError('unavailable')
+    const guest = this.element, initial = this.getSnapshot()
+    if (guest === undefined || !initial.available || initial.url === undefined) throw new CaptureError('unavailable')
+    const nonce = crypto.randomUUID()
+    const assertCurrent = (): void => {
+      if (this.lifetime.signal.aborted || this.occurrence?.aborted) throw new CaptureError('closed')
+      if (signal.aborted) throw new CaptureError('cancelled')
+      if (this.element !== guest || this.getSnapshot().generation !== initial.generation) throw new CaptureError('changed')
+      let url: string
+      try { url = guest.getURL() } catch (_error) { throw new CaptureError('changed') }
+      if (url !== initial.url) throw new CaptureError('changed')
+    }
+    const clean = async (): Promise<void> => {
+      const current = this.element
+      await Promise.all([...new Set([guest, current])].map(async target => {
+        if (target === undefined) return
+        try { await target.executeJavaScript(elementPickerCancelScript(nonce)) }
+        catch (_error) { /* Navigation or destruction can make the old document unreachable. */ }
+      }))
+    }
+    let releaseUnreachable: () => void = () => {}
+    const unreachable = new Promise<void>(resolve => { releaseUnreachable = resolve })
+    let rejectCancellation: (reason: CaptureError) => void = () => {}
+    const cancelled = new Promise<never>((_resolve, reject) => { rejectCancellation = reject })
+    let cleaning: Promise<void> | undefined
+    const cancel = (): void => {
+      let gone = this.lifetime.signal.aborted || this.element !== guest || this.getSnapshot().generation !== initial.generation
+      if (!gone) {
+        try { gone = guest.getURL() !== initial.url } catch (_error) { gone = true }
+      }
+      if (gone) releaseUnreachable()
+      let reason = new CaptureError('changed')
+      try { assertCurrent() } catch (error) { if (error instanceof CaptureError) reason = error }
+      cleaning ??= clean()
+      rejectCancellation(reason)
+    }
+    let finishDone: () => void = () => {}
+    this.pickerDone = new Promise(resolve => { finishDone = resolve })
+    this.pickerCancel = cancel
+    const unsubscribe = this.subscribe(cancel)
+    signal.addEventListener('abort', cancel, { once: true })
+    this.lifetime.signal.addEventListener('abort', cancel, { once: true })
+    const wait = <T,>(promise: Promise<T>): Promise<T> => Promise.race([promise, cancelled])
+    try {
+      assertCurrent()
+      const picked = decodeElementPickerReply(await wait(guest.executeJavaScript(elementPickerScript(instruction, limits.maxTextBytes, nonce))), limits.maxTextBytes)
+      assertCurrent()
+      const verify = async (): Promise<void> => {
+        const measured = decodeElementPickerReply(await wait(guest.executeJavaScript(elementPickerCheckScript(nonce))), limits.maxTextBytes)
+        assertCurrent()
+        if (JSON.stringify(measured) !== JSON.stringify(picked)) throw new CaptureError('changed')
+      }
+      await verify()
+      const native = await wait(guest.capturePage())
+      assertCurrent()
+      await verify()
+      const image: Extract<BrowserContextCapture, { kind: 'viewport' }> = { kind: 'viewport', url: initial.url, title: initial.title,
+        mimeType: 'image/png', bytes: pngBytes(native.toDataURL(), limits.maxImageBytes) }
+      boundCapture(image, { maxBytes: limits.maxImageBytes })
+      return { image, element: picked }
+    } catch (error) {
+      assertCurrent()
+      if (error instanceof CaptureError) throw error
+      throw new CaptureError('failed')
+    } finally {
+      try {
+        await Promise.race([cleaning ?? clean(), unreachable])
+        assertCurrent()
+      } finally {
+        unsubscribe()
+        signal.removeEventListener('abort', cancel)
+        this.lifetime.signal.removeEventListener('abort', cancel)
+        this.pickerCancel = undefined
+        this.pickerDone = undefined
+        finishDone()
+      }
+    }
+  }
+
   /** @returns after acquisition and all owned guest releases settle; repeated callers join the same disposal. */
   dispose(): Promise<void> {
     if (this.disposal !== undefined) return this.disposal
     this.lifetime.abort()
     this.occurrence?.removeEventListener('abort', this.ended)
     this.detach()
-    this.disposal = Promise.all([this.initializing, ...this.releases]).then(() => Promise.all(this.releases)).then(() => {})
+    this.disposal = Promise.all([this.initializing, this.pickerDone, ...this.releases]).then(() => Promise.all(this.releases)).then(() => {})
     return this.disposal
   }
 
@@ -207,6 +305,7 @@ export class NativePage {
   }
 
   private dropGuest(): void {
+    this.pickerCancel?.()
     this.guestLife?.abort()
     this.guestLife = undefined
     this.element?.remove()
