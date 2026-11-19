@@ -1,5 +1,6 @@
 /** Memory-only local-document scripts. The lease shell owns an opaque frame, never file authority. */
 import { elementPickerGuestSource } from '../readers/element-picker.ts'
+import { articleReaderSource } from '../readers/article.ts'
 import { LocalHtmlError, type LocalHtmlBundle, type LocalHtmlCommand, type LocalHtmlLimits } from './local-html-types.ts'
 
 type Reply = Record<string, unknown>
@@ -26,7 +27,7 @@ function bounded(source: string, maxBytes: number): string {
 }
 
 // Serialized verbatim; every dependency is an argument or a browser primitive.
-function broker(documentId: string, maxBytes: number, picker: (instruction: string, maxBytes: number, nonce: string) => Promise<object>): void {
+function broker(documentId: string, maxBytes: number, picker: (instruction: string, maxBytes: number, nonce: string) => Promise<object>, article: (maxBytes: number) => object): void {
   const scope: BrokerWindow = window
   const budgets = new Map<string, number>()
   const size = (value: unknown): number => new TextEncoder().encode(JSON.stringify(value)).byteLength
@@ -74,6 +75,11 @@ function broker(documentId: string, maxBytes: number, picker: (instruction: stri
         case 'selection':
           if (!Number.isSafeInteger(command.maxBytes) || command.maxBytes <= 0 || command.maxBytes > maxBytes) { value = { code: 'failed' }; break }
           value = selection(command.maxBytes)
+          break
+        case 'article':
+          if (!Number.isSafeInteger(command.maxBytes) || command.maxBytes <= 0 || command.maxBytes > maxBytes) { value = { code: 'failed' }; break }
+          value = article(command.maxBytes)
+          if (size(value) > command.maxBytes) value = { code: 'too-large' }
           break
         case 'pick':
           if (typeof command.nonce !== 'string' || typeof command.instruction !== 'string'
@@ -125,7 +131,8 @@ function frameBootstrap(encoded: string, brokerSource: string): void {
       }
     }
     const script = parsed.createElement('script')
-    script.textContent = brokerSource
+    // HTML serialization must not treat a closing tag inside fixed library code as the end of this script.
+    script.textContent = brokerSource.replace(/<\/script/giu, '<\\/script')
     parsed.body.append(script)
     const html = '<!doctype html>' + parsed.documentElement.outerHTML
     document.open(); document.write(html); document.close()
@@ -184,9 +191,14 @@ function shellBootstrap(documentId: string, expectedUrl: string, limits: LocalHt
         const raw = data.value
         if (!raw || typeof raw !== 'object') { settle(data.requestId, { code: 'failed' }); return }
         let value: Reply
-        const allowedCodes = operation.kind === 'selection' ? ['empty-selection', 'too-large', 'failed'] : ['too-large', 'failed', 'changed', 'cancelled']
+        const allowedCodes = operation.kind === 'selection' ? ['empty-selection', 'too-large', 'failed']
+          : operation.kind === 'article' ? ['no-article', 'too-large', 'failed'] : ['too-large', 'failed', 'changed', 'cancelled']
         if (typeof raw.code === 'string' && allowedCodes.includes(raw.code)) value = { code: raw.code }
         else if (operation.kind === 'selection' && typeof raw.text === 'string') value = { text: raw.text }
+        else if (operation.kind === 'article' && raw.kind === 'article' && raw.format === 'markdown'
+          && typeof raw.title === 'string' && typeof raw.text === 'string') {
+          value = { kind: 'article', format: 'markdown', title: raw.title, text: raw.text }
+        }
         else if (operation.kind === 'pick' || operation.kind === 'check') value = { element: raw.element }
         else value = { code: 'failed' }
         const size = new TextEncoder().encode(JSON.stringify(raw)).byteLength
@@ -222,8 +234,8 @@ function shellBootstrap(documentId: string, expectedUrl: string, limits: LocalHt
         return true
       }
       if (!ready) return { code: 'changed' }
-      if (!['selection', 'pick', 'check'].includes(command.kind)) return { code: 'failed' }
-      if (command.kind === 'selection' || command.kind === 'pick') {
+      if (!['selection', 'article', 'pick', 'check'].includes(command.kind)) return { code: 'failed' }
+      if (command.kind === 'selection' || command.kind === 'article' || command.kind === 'pick') {
         if (!Number.isSafeInteger(command.maxBytes) || command.maxBytes <= 0 || command.maxBytes > limits.maxBytes) return { code: 'failed' }
       }
       if ((command.kind === 'pick' || command.kind === 'check') && typeof command.nonce !== 'string') return { code: 'failed' }
@@ -239,7 +251,7 @@ function shellBootstrap(documentId: string, expectedUrl: string, limits: LocalHt
       return new Promise<Reply | boolean>(resolve => {
         const timer = command.kind === 'pick' ? undefined : window.setTimeout(() => settle(requestId, { code: 'timeout' }), limits.timeoutMs)
         pending.set(requestId, { resolve, ...(timer === undefined ? {} : { timer }), kind: command.kind,
-          ...(command.kind === 'selection' ? {} : { nonce: command.nonce }), budget })
+          ...(command.kind === 'pick' || command.kind === 'check' ? { nonce: command.nonce } : {}), budget })
         send(requestId, command)
       })
     } }
@@ -265,7 +277,7 @@ export function localHtmlBootstrapScript(bundle: LocalHtmlBundle, documentId: st
   const packed: PackedDocument = { html: bundle.html, assets: bundle.assets.map(asset => ({ ...asset, bytes: base64(asset.bytes) })) }
   const payload = JSON.stringify(packed)
   bounded(payload, limits.maxBytes)
-  const brokerSource = `(${broker.toString()})(${literal(documentId)},${limits.maxBytes},${elementPickerGuestSource()})`
+  const brokerSource = `(${broker.toString()})(${literal(documentId)},${limits.maxBytes},${elementPickerGuestSource()},${articleReaderSource()})`
   // HTML is encoded, never interpolated into a script body, including malformed closing tags.
   const initializer = `(${frameBootstrap.toString()})(${literal(base64(new TextEncoder().encode(payload)))},${literal(brokerSource)})`
   const srcdoc = `<!doctype html><html><head></head><body><script>${initializer}</script></body></html>`
@@ -275,7 +287,7 @@ export function localHtmlBootstrapScript(bundle: LocalHtmlBundle, documentId: st
 /** @param documentId - owning document, not file identity. @param command - fixed finite broker operation. @returns Promise expression with no caller-supplied executable code. */
 export function localHtmlCommandScript(documentId: string, command: LocalHtmlCommand): string {
   switch (command.kind) {
-    case 'status': case 'selection': case 'pick': case 'check': case 'cancel': break
+    case 'status': case 'selection': case 'article': case 'pick': case 'check': case 'cancel': break
     default: throw new LocalHtmlError('invalid')
   }
   const expression = (size: number): string => `(() => { const state = window.__dshLocalHtmlRuntime; return state && state.documentId === ${literal(documentId)} ? state.invoke(${literal(command)},${size}) : Promise.resolve({code:'closed'}); })()`

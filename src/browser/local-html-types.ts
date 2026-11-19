@@ -26,6 +26,7 @@ export interface LocalHtmlBundle {
 export type LocalHtmlCommand =
   | { readonly kind: 'status' }
   | { readonly kind: 'selection'; readonly maxBytes: number }
+  | { readonly kind: 'article'; readonly maxBytes: number }
   | { readonly kind: 'pick'; readonly maxBytes: number; readonly instruction: string; readonly nonce: string }
   | { readonly kind: 'check'; readonly nonce: string }
   | { readonly kind: 'cancel'; readonly nonce: string }
