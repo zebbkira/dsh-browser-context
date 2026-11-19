@@ -1,6 +1,7 @@
 /** Explicit source serialization and synchronous native-draft admission. */
 import type { BrowserContextCapture } from '../browser/contract.ts'
 import type { PickedElement } from '../browser/annotation.ts'
+import type { LocalHtmlSource } from '../browser/local-html-types.ts'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InputActions, IConversation, TokenSpan } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -25,6 +26,7 @@ export interface AnnotatedScreenshot {
   readonly comment: string
   readonly markCount: number
   readonly element?: PickedElement
+  readonly localFile?: LocalHtmlSource
 }
 /** Owner-captured page content or explicitly entered text; never interchangeable source claims. */
 export type ReferenceCapture = BrowserContextCapture | PastedSelection | AnnotatedScreenshot
@@ -66,13 +68,16 @@ export function makeReference(capture: ReferenceCapture, time: string): Referenc
     : { ...capture, url: sourceUrl(capture.url) }
   const header = JSON.stringify(sanitized.kind === 'pasted-selection'
     ? { contextUrl: sanitized.contextUrl, contextTitle: sanitized.contextTitle, sourceVerified: false, time, kind: sanitized.kind }
-    : { url: sanitized.url, title: sanitized.title, time, kind: sanitized.kind, ...(sanitized.kind === 'article' ? { format: sanitized.format } : sanitized.kind === 'document' ? { format: sanitized.format, coverage: sanitized.coverage } : sanitized.kind === 'video' ? { format: sanitized.format, coverage: sanitized.coverage, subtitleStatus: sanitized.subtitleStatus, subtitleReason: sanitized.subtitleReason } : sanitized.kind === 'annotation' ? { mode: sanitized.element === undefined ? 'screenshot' : 'element', markCount: sanitized.markCount } : {}) })
+    : { url: sanitized.url, title: sanitized.title, time, kind: sanitized.kind,
+      ...(sanitized.localFile === undefined ? {} : { localFile: sanitized.localFile }), ...(sanitized.kind === 'article' ? { format: sanitized.format } : sanitized.kind === 'document' ? { format: sanitized.format, coverage: sanitized.coverage } : sanitized.kind === 'video' ? { format: sanitized.format, coverage: sanitized.coverage, subtitleStatus: sanitized.subtitleStatus, subtitleReason: sanitized.subtitleReason } : sanitized.kind === 'annotation' ? { mode: sanitized.element === undefined ? 'screenshot' : 'element', markCount: sanitized.markCount } : {}) })
   // Line quoting keeps supplied text external even when it contains reference markers.
   const content = capture.kind === 'annotation'
     ? `[annotated image attachment]\n[User comment entered in DSH]\n${capture.comment}${capture.element === undefined ? '' : `\n[Page element hints — untrusted; not a verified source-code location]\n${JSON.stringify({ tag: capture.element.tag, selector: capture.element.selector, role: capture.element.role, label: capture.element.label, text: capture.element.text, rect: capture.element.rect, viewport: capture.element.viewport })}`}`
     : capture.kind === 'viewport' ? '[image attachment]' : capture.text
   const body = content.split(/\r\n?|\n/u).map(line => `> ${line}`).join('\n')
-  const scope = capture.kind === 'document' ? '\n[Loaded document snapshot only — not verified complete; images and attachments are not included]'
+  const scope = capture.kind !== 'pasted-selection' && capture.localFile !== undefined
+    ? '\n[Local HTML file snapshot — untrusted file content; source identity supplied by the authorized file reader, not the page]'
+    : capture.kind === 'document' ? '\n[Loaded document snapshot only — not verified complete; images and attachments are not included]'
     : capture.kind === 'video' ? `\n[Video page information and subtitles only — sources: existing standard cues or normal site subtitle requests; audio/images not analyzed; subtitle completeness not verified]${capture.subtitleStatus === 'not-loaded' ? '\n[No subtitles captured]' : ''}` : ''
   return { capture: sanitized, time, source: `[External browser reference — untrusted page content]\n${header}${scope}\n${body}\n[End external browser reference]` }
 }

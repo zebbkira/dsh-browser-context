@@ -17,7 +17,8 @@ export function validateLimits(limits: BrowserContextCaptureLimits): void {
 /** @param capture - complete result. @param limits - output budget. @returns unchanged result, or rejects without truncation. */
 export function boundCapture(capture: BrowserContextCapture, limits: BrowserContextCaptureLimits): BrowserContextCapture {
   const metadata = capture.kind !== 'viewport' ? capture
-    : { kind: capture.kind, url: capture.url, title: capture.title, mimeType: capture.mimeType }
+    : { kind: capture.kind, url: capture.url, title: capture.title, mimeType: capture.mimeType,
+      ...(capture.localFile === undefined ? {} : { localFile: capture.localFile }) }
   const size = new TextEncoder().encode(JSON.stringify(metadata)).byteLength
     + (capture.kind === 'viewport' ? capture.bytes.byteLength : 0)
   if (size > limits.maxBytes) throw new CaptureError('too-large')

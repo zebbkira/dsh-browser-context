@@ -6,5 +6,11 @@ export function validateConfig(config) {
     }
   }
   if (config.subtitleRequestTimeoutMs > 2147483647) throw new TypeError('dsh-browser-context: subtitleRequestTimeoutMs exceeds the browser timer range')
+  for (const field of ['localHtmlMaxBytes', 'localHtmlMaxFiles', 'localHtmlTimeoutMs']) {
+    if (config[field] !== undefined && (!Number.isSafeInteger(config[field]) || config[field] <= 0)) {
+      throw new TypeError(`dsh-browser-context: ${field} must be a positive safe integer`)
+    }
+  }
+  if (config.localHtmlTimeoutMs > 2147483647) throw new TypeError('dsh-browser-context: localHtmlTimeoutMs exceeds the browser timer range')
   return config
 }

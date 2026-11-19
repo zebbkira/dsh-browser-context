@@ -1,6 +1,7 @@
 /** Package-owned capture API; independent from optional or modified stock Browser APIs. */
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { ElementPickLimits, PickedElementCapture } from './annotation.ts'
+import type { LocalHtmlSource } from './local-html-types.ts'
 
 /** A subtitle request can fail without invalidating the separately captured video page information. */
 export type VideoSubtitleReason = 'not-available' | 'not-provided' | 'login-required' | 'access-denied' | 'request-failed' | 'timeout'
@@ -14,12 +15,12 @@ export interface VideoSubtitleDiagnostic {
 }
 
 /** Explicit data from this plugin's owned guest; image buffers are transient and borrowed read-only. */
-export type BrowserContextCapture =
+export type BrowserContextCapture = { readonly localFile?: LocalHtmlSource } & (
   | { readonly kind: 'selection'; readonly url: string; readonly title: string; readonly text: string }
   | { readonly kind: 'article'; readonly url: string; readonly title: string; readonly text: string; readonly format: 'markdown' }
   | { readonly kind: 'document'; readonly url: string; readonly title: string; readonly text: string; readonly format: 'text'; readonly coverage: 'loaded' }
   | { readonly kind: 'video'; readonly url: string; readonly title: string; readonly text: string; readonly format: 'text'; readonly coverage: 'loaded'; readonly subtitleStatus: 'loaded' | 'not-loaded'; readonly subtitleReason?: VideoSubtitleReason; readonly subtitleDiagnostic?: VideoSubtitleDiagnostic }
-  | { readonly kind: 'viewport'; readonly url: string; readonly title: string; readonly mimeType: 'image/png'; readonly bytes: Uint8Array }
+  | { readonly kind: 'viewport'; readonly url: string; readonly title: string; readonly mimeType: 'image/png'; readonly bytes: Uint8Array })
 
 /** Finite semantic operations, never JavaScript, selectors or native guest handles. */
 export type BrowserContextCaptureKind = BrowserContextCapture['kind']
@@ -40,6 +41,7 @@ export interface BrowserContextSource {
   readonly url: string
   readonly title: string
   readonly generation: number
+  readonly localFile?: LocalHtmlSource
 }
 
 /** Owner props for browserContext.actions; only loaded, observed pages supply source. */

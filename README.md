@@ -16,7 +16,7 @@
 | 企微文档 | 选中需要的文字，带进对话，让 DSH 按需求整理思路或起草方案 |
 | B站视频 | 引用视频信息和已有字幕，让 DSH 帮你整理内容、提炼重点或做学习笔记 |
 
-**开发分支新增圈画和元素批注：**可以在截图上画框、画圈、画箭头并写备注，也可以点选网页元素后再批注。[查看用法](https://github.com/zebbkira/dsh-browser-context/blob/feat/page-annotations/docs/annotations.md)。这两项尚未包含在下面的 v0.2.0 安装包中。
+**开发分支新增圈画和元素批注：**可以在截图上画框、画圈、画箭头并写备注，也可以点选网页元素后再批注。[查看用法](https://github.com/zebbkira/dsh-browser-context/blob/feat/page-annotations/docs/annotations.md)。还可在 DSH 的 HTML 文件上右键，选择「在引用浏览器中打开」，继续圈选和批注。[本地 HTML 用法与限制](https://github.com/zebbkira/dsh-browser-context/blob/feat/page-annotations/docs/local-html.md)。这些功能尚未包含在下面的 v0.2.0 安装包中。
 
 只需要一小段时，可以只引用选中的文字；想保留页面画面时，可以截图。遇到不方便读取的页面，也可以自己复制文字，再通过「粘贴选区」补充。
 

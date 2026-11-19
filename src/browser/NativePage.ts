@@ -9,6 +9,9 @@ import { articleScript } from '../readers/article.ts'
 import { bilibiliVideoScript, decodeBilibiliReply, isBilibiliVideo } from '../readers/bilibili.ts'
 import { decodeWecomReply, isWecomDocument, wecomDocumentScript, wecomMinimumReplyBytes } from '../readers/wecom.ts'
 import type { ElementPickLimits, PickedElementCapture } from './annotation.ts'
+import type { LocalHtmlBundle, LocalHtmlCommand, LocalHtmlLimits, LocalHtmlRequest, LocalHtmlSource, LocalHtmlErrorCode } from './local-html-types.ts'
+import { LocalHtmlError } from './local-html-types.ts'
+import { localHtmlBootstrapScript, localHtmlCommandScript } from './local-html-runtime.ts'
 import { decodeElementPickerReply, elementPickerCancelScript, elementPickerCheckScript, elementPickerScript } from '../readers/element-picker.ts'
 import css from './View.module.css'
 
@@ -19,7 +22,9 @@ export interface PageState {
   readonly observed: boolean
   readonly loading: boolean
   readonly available: boolean
-  readonly error: 'desktop-only' | 'invalid-address' | 'load-failed' | undefined
+  readonly error: 'desktop-only' | 'invalid-address' | 'load-failed' | `local-${LocalHtmlErrorCode}` | undefined
+  readonly localFile?: LocalHtmlSource | undefined
+  readonly localPath?: string | undefined
   readonly generation: number
 }
 
@@ -31,6 +36,16 @@ function address(value: string, applicationOrigin: string): string | undefined {
     return (url.protocol === 'https:' || url.protocol === 'http:') && url.username === '' && url.password === ''
       && url.origin !== applicationOrigin ? url.href : undefined
   } catch (_error) { return undefined } // Address input is untrusted; do not navigate on parse failure.
+}
+
+/** Loader stays in the apply closure and reads through the captured session's file authority. */
+export type LocalHtmlLoader = (request: LocalHtmlRequest, signal: AbortSignal) => Promise<{ bundle: LocalHtmlBundle; limits: LocalHtmlLimits }>
+interface LocalNavigation {
+  readonly request: LocalHtmlRequest
+  readonly controller: AbortController
+  prepared?: { bundle: LocalHtmlBundle; limits: LocalHtmlLimits }
+  document?: { readonly id: string; readonly physicalUrl: string; frameGeneration: number }
+  task?: Promise<void>
 }
 
 /** Owns one tab's guest, asynchronous reservations, listeners and captures until explicit disposal. */
@@ -48,13 +63,15 @@ export class NativePage {
   private readonly releases = new Set<Promise<void>>()
   private pending: string | undefined
   private ready = false
+  private localNavigation: LocalNavigation | undefined
   private pickerCancel: (() => void) | undefined
   private pickerDone: Promise<void> | undefined
   private readonly ended = (): void => { void this.dispose() }
   private openRequested: (url: string) => void = () => {}
 
   constructor(private readonly bridge: BrowserBridge | undefined,
-    private readonly workspace: (signal: AbortSignal) => Promise<string>, private readonly applicationOrigin: string) {}
+    private readonly workspace: (signal: AbortSignal) => Promise<string>, private readonly applicationOrigin: string,
+    private readonly localLoader?: LocalHtmlLoader) {}
 
   /** @returns stable snapshot until an owned guest event or navigation changes it. */
   getSnapshot = (): PageState => this.state.getSnapshot()
@@ -62,7 +79,7 @@ export class NativePage {
   subscribe = (listener: () => void): (() => void) => this.state.subscribe(listener)
 
   /** @param hostId - own viewport id. @param signal - tab occurrence. @param initialUrl - explicit open URL. @param open - popup-to-own-tab callback. @returns physical mount cleanup. */
-  mount(hostId: string, signal: AbortSignal, initialUrl: string | undefined, open: (url: string) => void): () => void {
+  mount(hostId: string, signal: AbortSignal, initialUrl: string | undefined, open: (url: string) => void, initialLocal?: LocalHtmlRequest): () => void {
     if (this.lifetime.signal.aborted || signal.aborted) return () => {}
     const host = document.getElementById(hostId)
     if (host === null) throw new Error('Reference browser viewport is not mounted')
@@ -76,7 +93,9 @@ export class NativePage {
     this.attachment = attachment
     this.openRequested = open
     if (this.bridge === undefined) this.publish({ error: 'desktop-only' })
+    else if (this.getSnapshot().localPath !== undefined) this.loadLocalFile(this.getSnapshot().localPath!)
     else if (this.getSnapshot().url !== undefined) this.loadUrl(this.getSnapshot().url!)
+    else if (initialLocal !== undefined) this.loadLocalFile(initialLocal.path)
     else if (initialUrl !== undefined) this.loadUrl(initialUrl)
     return () => { if (this.attachment === attachment) this.detach() }
   }
@@ -87,14 +106,128 @@ export class NativePage {
     const url = address(value, this.applicationOrigin)
     if (url === undefined) { this.publish({ error: 'invalid-address' }); return }
     if (this.bridge === undefined) { this.publish({ error: 'desktop-only' }); return }
+    this.localNavigation?.controller.abort()
+    this.localNavigation = undefined
     this.pending = url
-    this.publish({ url, title: new URL(url).hostname, observed: false, loading: true, error: undefined })
+    this.publish({ url, title: new URL(url).hostname, observed: false, loading: true, error: undefined, localFile: undefined, localPath: undefined })
     if (this.ready) this.loadPending()
     else this.initialize()
   }
 
   /** Reload the owned URL; same-URL requests still invalidate every pending capture. */
-  reload(): void { const url = this.getSnapshot().url; if (url !== undefined) this.loadUrl(url) }
+  reload(): void {
+    const state = this.getSnapshot()
+    if (state.localPath !== undefined) this.loadLocalFile(state.localPath)
+    else if (state.url !== undefined) this.loadUrl(state.url)
+  }
+
+  /** Read a captured file target under its session authority, then render only inside an opaque child frame. */
+  loadLocalFile(path: string): void {
+    if (this.lifetime.signal.aborted) return
+    this.dropGuest()
+    this.pending = undefined
+    this.publish({ url: undefined, localPath: path, localFile: undefined, title: path.split(/[\\/]/u).at(-1) ?? path,
+      loading: true, observed: false, error: undefined })
+    if (this.bridge === undefined) { this.publish({ error: 'desktop-only', loading: false }); return }
+    const loader = this.localLoader
+    if (loader === undefined) { this.publish({ error: 'local-unsupported', loading: false }); return }
+    const navigation: LocalNavigation = { request: { path }, controller: new AbortController() }
+    this.localNavigation = navigation
+    const signal = AbortSignal.any([navigation.controller.signal, this.lifetime.signal,
+      ...(this.occurrence === undefined ? [] : [this.occurrence])])
+    let abort = (): void => {}
+    const cancelled = new Promise<never>((_resolve, reject) => {
+      abort = () => reject(new LocalHtmlError('closed'))
+      if (signal.aborted) abort()
+      else signal.addEventListener('abort', abort, { once: true })
+    })
+    const reading = Promise.resolve().then(() => {
+      if (signal.aborted) throw new LocalHtmlError('closed')
+      return loader(navigation.request, signal)
+    })
+    navigation.task = Promise.race([reading, cancelled]).then(prepared => {
+      if (signal.aborted || this.localNavigation !== navigation) return
+      navigation.prepared = prepared
+      if (this.ready) this.loadPending()
+      else this.initialize()
+    }).catch((error: unknown) => {
+      if (!signal.aborted && this.localNavigation === navigation) this.localFail(error)
+    }).finally(() => { signal.removeEventListener('abort', abort) })
+  }
+
+  private localFail(error: unknown): void {
+    this.publish({ error: `local-${error instanceof LocalHtmlError ? error.code : 'frame'}`, observed: false, loading: false })
+  }
+
+  private physicalUrl(state: PageState): string | undefined {
+    return state.localFile === undefined ? state.url : this.localNavigation?.document?.physicalUrl
+  }
+
+  private async executeLocal(navigation: LocalNavigation, script: string, finite = true, external?: AbortSignal): Promise<unknown> {
+    const guest = this.element
+    const prepared = navigation.prepared
+    if (guest === undefined || prepared === undefined || this.localNavigation !== navigation) throw new LocalHtmlError('changed')
+    const signal = AbortSignal.any([navigation.controller.signal, this.lifetime.signal,
+      ...(this.guestLife === undefined ? [] : [this.guestLife.signal]), ...(external === undefined ? [] : [external])])
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let abort = (): void => {}
+    const interrupted = new Promise<never>((_resolve, reject) => {
+      abort = () => reject(new LocalHtmlError('closed'))
+      if (signal.aborted) abort()
+      else signal.addEventListener('abort', abort, { once: true })
+      if (finite) timer = setTimeout(() => reject(new LocalHtmlError('timeout')), prepared.limits.timeoutMs)
+    })
+    try { return await Promise.race([guest.executeJavaScript(script), interrupted]) }
+    finally { if (timer !== undefined) clearTimeout(timer); signal.removeEventListener('abort', abort) }
+  }
+
+  private async localCommand(navigation: LocalNavigation, command: LocalHtmlCommand, signal?: AbortSignal): Promise<unknown> {
+    const document = navigation.document
+    if (document === undefined) throw new LocalHtmlError('changed')
+    return this.executeLocal(navigation, localHtmlCommandScript(document.id, command), command.kind !== 'pick', signal)
+  }
+
+  private localStatus(value: unknown, navigation: LocalNavigation): number {
+    if (typeof value !== 'object' || value === null || !('documentId' in value) || value.documentId !== navigation.document?.id
+      || !('ready' in value) || value.ready !== true || !('frameGeneration' in value)
+      || typeof value.frameGeneration !== 'number' || !Number.isSafeInteger(value.frameGeneration) || value.frameGeneration < 1) {
+      if (typeof value === 'object' && value !== null && 'code' in value && value.code === 'too-large') throw new LocalHtmlError('limit')
+      if (typeof value === 'object' && value !== null && 'code' in value && value.code === 'timeout') throw new LocalHtmlError('timeout')
+      throw new LocalHtmlError('frame')
+    }
+    return value.frameGeneration
+  }
+
+  private async assertLocalReady(navigation: LocalNavigation): Promise<void> {
+    try {
+      const generation = this.localStatus(await this.localCommand(navigation, { kind: 'status' }), navigation)
+      if (generation !== navigation.document?.frameGeneration || this.localNavigation !== navigation) throw new LocalHtmlError('changed')
+    } catch (error) {
+      if (this.localNavigation === navigation && !navigation.controller.signal.aborted) {
+        navigation.controller.abort()
+        this.localFail(error instanceof LocalHtmlError ? error : new LocalHtmlError('changed'))
+      }
+      throw new CaptureError('changed')
+    }
+  }
+
+  private bootstrapLocal(navigation: LocalNavigation, guest: OwnedWebview): void {
+    const prepared = navigation.prepared
+    if (prepared === undefined || this.lease === undefined || navigation.document !== undefined) return
+    const physicalUrl = `about:blank#${this.lease}`
+    navigation.document = { id: crypto.randomUUID(), physicalUrl, frameGeneration: 0 }
+    const document = navigation.document
+    navigation.task = (async () => {
+      if (guest.getURL() !== physicalUrl) throw new LocalHtmlError('changed')
+      const result = await this.executeLocal(navigation, localHtmlBootstrapScript(prepared.bundle, document.id, physicalUrl, prepared.limits))
+      if (this.localNavigation !== navigation || navigation.controller.signal.aborted || this.element !== guest) return
+      document.frameGeneration = this.localStatus(result, navigation)
+      this.publish({ url: prepared.bundle.source.resourceAddress, localFile: prepared.bundle.source,
+        localPath: prepared.bundle.source.path, title: prepared.bundle.title, observed: true, loading: false, error: undefined })
+    })().catch((error: unknown) => {
+      if (!navigation.controller.signal.aborted && this.localNavigation === navigation) this.localFail(error)
+    })
+  }
 
   /** @param kind - semantic capture, never caller script. @param limits - complete output budget. @returns transient data from the same loaded document. */
   async capture(kind: BrowserContextCaptureKind, limits: BrowserContextCaptureLimits): Promise<BrowserContextCapture> {
@@ -109,10 +242,12 @@ export class NativePage {
       if (this.element !== element || this.getSnapshot().generation !== state.generation) throw new CaptureError('changed')
       let url: string
       try { url = element.getURL() } catch (_error) { throw new CaptureError('changed') }
-      if (url !== state.url) throw new CaptureError('changed')
+      if (url !== this.physicalUrl(state)) throw new CaptureError('changed')
     }
     try {
       assertCurrent()
+      const local = this.localNavigation
+      if (state.localFile !== undefined && local !== undefined) { await this.assertLocalReady(local); assertCurrent() }
       let result: BrowserContextCapture
       if (kind === 'selection') {
         if (isWecomDocument(state.url)) {
@@ -129,7 +264,9 @@ export class NativePage {
           }
           result = { kind, url: state.url, title: state.title, text: reply.text }
         } else {
-          const reply = await element.executeJavaScript(selectionScript(limits.maxBytes))
+          const reply = local !== undefined && state.localFile !== undefined
+            ? await this.localCommand(local, { kind: 'selection', maxBytes: limits.maxBytes })
+            : await element.executeJavaScript(selectionScript(limits.maxBytes))
           assertCurrent()
           if (typeof reply !== 'object' || reply === null) throw new CaptureError('failed')
           if ('code' in reply && (reply.code === 'empty-selection' || reply.code === 'too-large')) throw new CaptureError(reply.code)
@@ -165,6 +302,7 @@ export class NativePage {
         if (reply.url !== state.url) throw new CaptureError('changed')
         result = { ...reply }
       } else if (kind === 'article') {
+        if (state.localFile !== undefined) throw new CaptureError('unsupported')
         if (isWecomDocument(state.url) || isBilibiliVideo(state.url)) throw new CaptureError('unsupported')
         const reply = await element.executeJavaScript(articleScript(limits.maxBytes))
         assertCurrent()
@@ -180,7 +318,8 @@ export class NativePage {
         assertCurrent()
         result = { kind, url: state.url, title: state.title, mimeType: 'image/png', bytes: pngBytes(image.toDataURL(), limits.maxBytes) }
       }
-      return boundCapture(result, limits)
+      if (state.localFile !== undefined && local !== undefined) { await this.assertLocalReady(local); assertCurrent() }
+      return boundCapture(state.localFile === undefined ? result : { ...result, localFile: state.localFile }, limits)
     } catch (error) {
       assertCurrent()
       if (error instanceof CaptureError) throw error
@@ -207,19 +346,21 @@ export class NativePage {
     const guest = this.element, initial = this.getSnapshot()
     if (guest === undefined || !initial.available || initial.url === undefined) throw new CaptureError('unavailable')
     const nonce = crypto.randomUUID()
+    const local = initial.localFile === undefined ? undefined : this.localNavigation
     const assertCurrent = (): void => {
       if (this.lifetime.signal.aborted || this.occurrence?.aborted) throw new CaptureError('closed')
       if (signal.aborted) throw new CaptureError('cancelled')
       if (this.element !== guest || this.getSnapshot().generation !== initial.generation) throw new CaptureError('changed')
       let url: string
       try { url = guest.getURL() } catch (_error) { throw new CaptureError('changed') }
-      if (url !== initial.url) throw new CaptureError('changed')
+      if (url !== this.physicalUrl(initial)) throw new CaptureError('changed')
     }
     const clean = async (): Promise<void> => {
       const current = this.element
       await Promise.all([...new Set([guest, current])].map(async target => {
         if (target === undefined) return
-        try { await target.executeJavaScript(elementPickerCancelScript(nonce)) }
+        try { await target.executeJavaScript(local?.document === undefined
+          ? elementPickerCancelScript(nonce) : localHtmlCommandScript(local.document.id, { kind: 'cancel', nonce })) }
         catch (_error) { /* Navigation or destruction can make the old document unreachable. */ }
       }))
     }
@@ -231,7 +372,7 @@ export class NativePage {
     const cancel = (): void => {
       let gone = this.lifetime.signal.aborted || this.element !== guest || this.getSnapshot().generation !== initial.generation
       if (!gone) {
-        try { gone = guest.getURL() !== initial.url } catch (_error) { gone = true }
+        try { gone = guest.getURL() !== this.physicalUrl(initial) } catch (_error) { gone = true }
       }
       if (gone) releaseUnreachable()
       let reason = new CaptureError('changed')
@@ -248,10 +389,17 @@ export class NativePage {
     const wait = <T,>(promise: Promise<T>): Promise<T> => Promise.race([promise, cancelled])
     try {
       assertCurrent()
-      const picked = decodeElementPickerReply(await wait(guest.executeJavaScript(elementPickerScript(instruction, limits.maxTextBytes, nonce))), limits.maxTextBytes)
+      if (local !== undefined) { await this.assertLocalReady(local); assertCurrent() }
+      guest.focus()
+      const picked = decodeElementPickerReply(await wait(local === undefined
+        ? guest.executeJavaScript(elementPickerScript(instruction, limits.maxTextBytes, nonce))
+        : this.localCommand(local, { kind: 'pick', instruction, maxBytes: limits.maxTextBytes, nonce }, signal)), limits.maxTextBytes)
       assertCurrent()
       const verify = async (): Promise<void> => {
-        const measured = decodeElementPickerReply(await wait(guest.executeJavaScript(elementPickerCheckScript(nonce))), limits.maxTextBytes)
+        const measured = decodeElementPickerReply(await wait(local === undefined
+          ? guest.executeJavaScript(elementPickerCheckScript(nonce))
+          : this.localCommand(local, { kind: 'check', nonce }, signal)), limits.maxTextBytes)
+        if (local !== undefined) { await this.assertLocalReady(local); assertCurrent() }
         assertCurrent()
         if (JSON.stringify(measured) !== JSON.stringify(picked)) throw new CaptureError('changed')
       }
@@ -260,7 +408,8 @@ export class NativePage {
       assertCurrent()
       await verify()
       const image: Extract<BrowserContextCapture, { kind: 'viewport' }> = { kind: 'viewport', url: initial.url, title: initial.title,
-        mimeType: 'image/png', bytes: pngBytes(native.toDataURL(), limits.maxImageBytes) }
+        mimeType: 'image/png', bytes: pngBytes(native.toDataURL(), limits.maxImageBytes),
+        ...(initial.localFile === undefined ? {} : { localFile: initial.localFile }) }
       boundCapture(image, { maxBytes: limits.maxImageBytes })
       return { image, element: picked }
     } catch (error) {
@@ -285,10 +434,11 @@ export class NativePage {
   /** @returns after acquisition and all owned guest releases settle; repeated callers join the same disposal. */
   dispose(): Promise<void> {
     if (this.disposal !== undefined) return this.disposal
+    const localTask = this.localNavigation?.task
     this.lifetime.abort()
     this.occurrence?.removeEventListener('abort', this.ended)
     this.detach()
-    this.disposal = Promise.all([this.initializing, this.pickerDone, ...this.releases]).then(() => Promise.all(this.releases)).then(() => {})
+    this.disposal = Promise.all([this.initializing, this.pickerDone, localTask, ...this.releases]).then(() => Promise.all(this.releases)).then(() => {})
     return this.disposal
   }
 
@@ -305,6 +455,8 @@ export class NativePage {
   }
 
   private dropGuest(): void {
+    this.localNavigation?.controller.abort()
+    this.localNavigation = undefined
     this.pickerCancel?.()
     this.guestLife?.abort()
     this.guestLife = undefined
@@ -321,7 +473,7 @@ export class NativePage {
     const attachment = this.attachment
     const bridge = this.bridge
     if (attachment === undefined || bridge === undefined || this.initializing !== undefined
-      || this.element !== undefined || this.pending === undefined || this.lifetime.signal.aborted) return
+      || this.element !== undefined || this.pending === undefined && this.localNavigation?.prepared === undefined || this.lifetime.signal.aborted) return
     const signal = AbortSignal.any([attachment.life.signal, this.lifetime.signal])
     this.initializing = this.acquire(attachment.host, bridge, signal).catch((_error: unknown) => {
       if (!signal.aborted) { this.dropGuest(); this.fail() }
@@ -354,7 +506,16 @@ export class NativePage {
     for (const type of ['did-navigate', 'did-navigate-in-page', 'did-start-navigation', 'did-start-loading', 'did-stop-loading', 'page-title-updated']) {
       guest.addEventListener(type, (event) => {
         if ((type === 'did-navigate-in-page' || type === 'did-start-navigation')
-          && 'isMainFrame' in event && event.isMainFrame === false) return
+          && 'isMainFrame' in event && event.isMainFrame === false) {
+          const local = this.localNavigation
+          if (type === 'did-start-navigation' && local?.document !== undefined && local.document.frameGeneration > 0
+            && (!('isInPlace' in event) || event.isInPlace !== true)) {
+            local.controller.abort()
+            this.localFail(new LocalHtmlError('changed'))
+          }
+          return
+        }
+        if (this.localNavigation !== undefined && (type === 'did-start-loading' || type === 'did-start-navigation')) return
         if (type === 'did-start-navigation' || type === 'did-start-loading') this.publish({ loading: true })
         else this.observe(guest)
       }, { signal: guestSignal })
@@ -371,7 +532,9 @@ export class NativePage {
   private loadPending(): void {
     const guest = this.element
     const url = this.pending
-    if (!this.ready || guest === undefined || url === undefined) return
+    if (!this.ready || guest === undefined) return
+    if (this.localNavigation?.prepared !== undefined) { this.bootstrapLocal(this.localNavigation, guest); return }
+    if (url === undefined) return
     this.pending = undefined
     const generation = this.getSnapshot().generation
     void guest.loadURL(url).catch((_error: unknown) => {
@@ -382,9 +545,14 @@ export class NativePage {
   private observe(guest: OwnedWebview): void {
     if (this.element !== guest || this.lifetime.signal.aborted) return
     try {
-      const url = address(guest.getURL(), this.applicationOrigin)
+      const physical = guest.getURL()
+      const local = this.localNavigation
+      if (local !== undefined && (physical === local.document?.physicalUrl || physical === `about:blank#${this.lease}`)) return
+      const url = address(physical, this.applicationOrigin)
       if (url === undefined) return
-      this.publish({ url, title: guest.getTitle() || new URL(url).hostname, observed: true, loading: guest.isLoading(), error: undefined })
+      if (local !== undefined) { local.controller.abort(); this.localNavigation = undefined }
+      this.publish({ url, title: guest.getTitle() || new URL(url).hostname, observed: true, loading: guest.isLoading(), error: undefined,
+        localFile: undefined, localPath: undefined })
     } catch (_error) { this.fail() }
   }
 

@@ -2,6 +2,25 @@
 import type { ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { Limits } from './reference.ts'
 import { ReferenceError } from './reference.ts'
+import { LocalHtmlError } from '../browser/local-html-types.ts'
+import type { LocalHtmlLimits } from '../browser/local-html-types.ts'
+/** New local-file operations require their own wire-resolved settings, without changing web capture limits. */
+export interface HostSettings extends Limits {
+  readonly localHtmlMaxBytes?: number
+  readonly localHtmlMaxFiles?: number
+  readonly localHtmlTimeoutMs?: number
+}
+/** @param snapshot - authoritative Host form. @returns complete local-file settings or a visible configuration failure. */
+export function resolveLocalHtmlLimits(snapshot: ConfigFormSnapshot<HostSettings>): LocalHtmlLimits {
+  const value = snapshot.value
+  if (snapshot.status !== 'ready' || value === undefined
+    || !Number.isSafeInteger(value.localHtmlMaxBytes) || value.localHtmlMaxBytes === undefined || value.localHtmlMaxBytes <= 0
+    || !Number.isSafeInteger(value.localHtmlMaxFiles) || value.localHtmlMaxFiles === undefined || value.localHtmlMaxFiles <= 0
+    || !Number.isSafeInteger(value.localHtmlTimeoutMs) || value.localHtmlTimeoutMs === undefined || value.localHtmlTimeoutMs <= 0 || value.localHtmlTimeoutMs > 2147483647) {
+    throw new LocalHtmlError('config')
+  }
+  return { maxBytes: value.localHtmlMaxBytes, maxFiles: value.localHtmlMaxFiles, timeoutMs: value.localHtmlTimeoutMs }
+}
 /** @param snapshot - authoritative wire-backed form state. @returns whether the size limits and any supplied subtitle timeout are usable. */
 export function limitsAvailable(snapshot: ConfigFormSnapshot<Limits>): boolean {
   return snapshot.status === 'ready' && snapshot.value !== undefined

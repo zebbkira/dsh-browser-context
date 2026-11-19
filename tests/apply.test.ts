@@ -3,6 +3,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { apply } from '../src/client/index.ts'
 import { makeReference } from '../src/client/reference.ts'
 import { registerReferenceBrowser } from '../src/browser/index.ts'
+import { registerLocalHtmlActions } from '../src/client/local-html-actions.ts'
+vi.mock('../src/client/local-html-actions.ts', () => ({ registerLocalHtmlActions: vi.fn(), localHtmlActionsInject: ['contextMenus', 'remote', 'remote.workspaceFiles'] }))
 vi.mock('../src/browser/index.ts', () => ({ registerReferenceBrowser: vi.fn(), referenceBrowserInject: ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs', 'workspaces'] }))
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({ Button: () => null, Menu: () => null, MenuItemButton: () => null, Tooltip: () => null }))
 
@@ -20,7 +22,8 @@ describe('slot lifetime and session-addressed native integration', () => {
       effect: (setup: () => (() => void)) => { const dispose = setup(); disposers.push(dispose) },
     }
     apply(ctx as Context)
-    expect(registerReferenceBrowser).toHaveBeenCalledWith(ctx)
+    expect(registerReferenceBrowser).toHaveBeenCalledWith(ctx, expect.any(Function))
+    expect(registerLocalHtmlActions).toHaveBeenCalledWith(ctx)
     expect(ctx.configForms.get).toHaveBeenCalledWith('dsh-browser-context')
     const options = registration.mock.calls[0]![0]
     const injected = options.inject('one')
