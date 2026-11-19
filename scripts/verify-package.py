@@ -109,9 +109,9 @@ def export_targets(value):
         require(value is None, "invalid-exports-value")
 
 
-def check_manifest(root):
+def check_manifest(root, expected_version):
     manifest = json.loads((root / "package.json").read_text(encoding="utf-8"))
-    require(manifest.get("name") == "dsh-browser-context" and manifest.get("version") == "0.2.0", "unexpected-package-identity")
+    require(manifest.get("name") == "dsh-browser-context" and manifest.get("version") == expected_version, "unexpected-package-identity")
     require(manifest.get("type") == "module", "not-esm-package")
     require(manifest.get("private") is True, "unexpected-package-publication-mode")
     published = manifest.get("files")
@@ -160,7 +160,7 @@ def check_patch(root):
     print("PASS patch: one self insert only; no core disable/override", flush=True)
 
 
-def verify(archive, node):
+def verify(archive, node, expected_version):
     helper = Path(__file__).with_suffix(".mjs").resolve()
     require(helper.is_file(), "node-helper-missing")
     with tempfile.TemporaryDirectory(prefix="dsh-packed-") as temporary:
@@ -202,7 +202,7 @@ def verify(archive, node):
         for relative in sorted(regulars):
             # Only already-validated package-local filenames, never host paths/content.
             print(f"  package/{relative}", flush=True)
-        check_manifest(root)
+        check_manifest(root, expected_version)
         check_patch(root)
         environment = dict(os.environ)
         environment.pop("NODE_PATH", None)
@@ -216,11 +216,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archive", type=Path)
     parser.add_argument("--node", default="node")
+    parser.add_argument("--expected-version", help="Expected package version; defaults to this checkout's package.json")
     args = parser.parse_args()
     node = args.node if Path(args.node).is_file() else shutil.which(args.node)
     try:
         require(node is not None, "node-runtime-unavailable")
-        verify(args.archive, node)
+        expected_version = args.expected_version
+        if expected_version is None:
+            metadata = json.loads((Path(__file__).resolve().parent.parent / "package.json").read_text(encoding="utf-8"))
+            require(isinstance(metadata, dict), "invalid-checkout-manifest")
+            expected_version = metadata.get("version")
+        require(isinstance(expected_version, str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", expected_version) is not None, "invalid-expected-version")
+        verify(args.archive, node, expected_version)
     except (VerificationError, OSError, ValueError, tarfile.TarError, subprocess.TimeoutExpired) as error:
         code = str(error) if isinstance(error, VerificationError) else type(error).__name__
         print(f"FAIL packed verification: {code}; no installation/application was requested", file=sys.stderr)

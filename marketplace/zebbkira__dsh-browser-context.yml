@@ -1,10 +1,10 @@
-# 收录条目草稿；未向上游投稿，不代表已收录。
-# 主维护者确认 v0.2.0 预发布附件已上传且可下载后，才能使用此 tarball 地址投稿。
+# 发布元数据参考；上游目录条目和评审状态单独维护，不代表已收录。
+# 须确认 v0.3.0 正式附件已上传且校验通过，再将此 tarball 地址用于上游更新。
 # 仓库须在 2026-11-16T14:08:12Z 创建满 1 天；此文件不安排自动投稿。
 url: https://github.com/zebbkira/dsh-browser-context
 name: zebbkira/dsh-browser-context
 category: browser
 description:
-  en: 'Add web and WeCom selections, accessible existing Bilibili subtitles, and screenshots to a DSH Desktop draft without sending it automatically.'
-  zh: '将网页与企微选区、已有且可访问的 B站字幕及截图加入 DSH Desktop 草稿，不自动发送。'
-tarball: https://github.com/zebbkira/dsh-browser-context/releases/download/v0.2.0/dsh-browser-context-0.2.0.tgz
+  en: 'Bring web and local HTML articles, WeCom selections, Bilibili subtitles, screenshots and annotations into a DSH Desktop draft without sending automatically.'
+  zh: '在 DSH 中引用网页和本地 HTML 正文、企微选区、B站已有字幕，或添加截图与批注，不自动发送。'
+tarball: https://github.com/zebbkira/dsh-browser-context/releases/download/v0.3.0/dsh-browser-context-0.3.0.tgz
