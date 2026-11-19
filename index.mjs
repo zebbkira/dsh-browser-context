@@ -6,10 +6,14 @@ export const Config = z.object({
   maxTextBytes: z.natural().min(1).required().volatile(),
   maxImageBytes: z.natural().min(1).required().volatile(),
   subtitleRequestTimeoutMs: z.natural().min(1).max(2147483647).default(15000).volatile(),
+  localHtmlMaxBytes: z.natural().min(1).default(16777216).volatile(),
+  localHtmlMaxFiles: z.natural().min(1).default(64).volatile(),
+  localHtmlTimeoutMs: z.natural().min(1).max(2147483647).default(15000).volatile(),
 })
 export const name = 'dsh-browser-context'
 export const inject = []
 /** Validate explicit deployment configuration without creating background work. */
 export function apply(_ctx, config) {
-  validateConfig({ maxTextBytes: config.maxTextBytes.get(), maxImageBytes: config.maxImageBytes.get(), subtitleRequestTimeoutMs: config.subtitleRequestTimeoutMs.get() })
+  validateConfig({ maxTextBytes: config.maxTextBytes.get(), maxImageBytes: config.maxImageBytes.get(), subtitleRequestTimeoutMs: config.subtitleRequestTimeoutMs.get(),
+    localHtmlMaxBytes: config.localHtmlMaxBytes.get(), localHtmlMaxFiles: config.localHtmlMaxFiles.get(), localHtmlTimeoutMs: config.localHtmlTimeoutMs.get() })
 }

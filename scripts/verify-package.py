@@ -147,11 +147,16 @@ def check_patch(root):
     lines = [line.rstrip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
     pattern = (r"- insert:\n    - id: dsh-browser-context\n      name: dsh-browser-context\n"
                r"      config:\n        maxTextBytes: ([1-9][0-9]*)\n        maxImageBytes: ([1-9][0-9]*)\n"
-               r"        subtitleRequestTimeoutMs: ([1-9][0-9]*)")
+               r"        subtitleRequestTimeoutMs: ([1-9][0-9]*)"
+               r"(?:\n        localHtmlMaxBytes: ([1-9][0-9]*)\n        localHtmlMaxFiles: ([1-9][0-9]*)\n"
+               r"        localHtmlTimeoutMs: ([1-9][0-9]*))?")
     match = re.fullmatch(pattern, "\n".join(lines))
     require(match is not None, "patch-not-exact-self-insert")
     require(all(int(v) <= 9007199254740991 for v in match.groups()[:2]), "patch-limit-not-safe-integer")
     require(int(match.group(3)) <= 2147483647, "patch-timeout-out-of-range")
+    if match.group(4) is not None:
+        require(all(int(v) <= 9007199254740991 for v in match.groups()[3:5]), "patch-local-limit-not-safe-integer")
+        require(int(match.group(6)) <= 2147483647, "patch-local-timeout-out-of-range")
     print("PASS patch: one self insert only; no core disable/override", flush=True)
 
 

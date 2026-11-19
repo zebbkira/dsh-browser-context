@@ -107,6 +107,9 @@ function pickerGuest(instruction: string, maxBytes: number, nonce: string): Prom
   })
 }
 
+/** @returns existing self-contained picker function source for the opaque local-document broker; accepts no caller code. */
+export function elementPickerGuestSource(): string { return pickerGuest.toString() }
+
 /** @param instruction - localized host text. @param maxBytes - complete reply JSON budget. @param nonce - unique operation identity. @returns fixed self-contained guest script. */
 export function elementPickerScript(instruction: string, maxBytes: number, nonce: string): string {
   return `(${pickerGuest.toString()})(${JSON.stringify(instruction)},${JSON.stringify(maxBytes)},${JSON.stringify(nonce)})`

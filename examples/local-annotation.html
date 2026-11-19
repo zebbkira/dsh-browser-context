@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>引用浏览器 · 本地 HTML 测试页</title>
+<style>
+body{margin:0;background:#f3f6fa;color:#243247;font:16px/1.65 system-ui,sans-serif}main{max-width:760px;margin:48px auto;padding:28px;background:#fff;border:1px solid #dbe3ec;border-radius:16px}h1{font-size:25px;font-weight:500;margin:0 0 12px}p{margin:12px 0}.target{padding:24px;border:2px solid #3b82f6;border-radius:12px;background:#edf5ff}.target h2{font-size:20px;font-weight:500;margin:0 0 10px}button{padding:10px 18px;font:inherit;border:1px solid #2563eb;border-radius:8px;color:#1d4ed8;background:white;cursor:pointer}small{display:block;color:#52647a;margin-top:20px}@media(max-width:600px){main{margin:16px;padding:20px}}
+</style>
+</head>
+<body>
+<main>
+<h1>本地 HTML 圈选与批注</h1>
+<p>这是一个不需要服务器、不依赖外部资源的测试页面。用「引用浏览器」打开后，可以截图圈画，也可以点选下面的区域并写备注。</p>
+<section class="target" aria-label="可以点选的示例区域">
+<h2>请试着选中这里</h2>
+<p>例如写下：“把这个区域改成更紧凑的布局，保留标题和按钮。”</p>
+<button id="counter" type="button">普通点击计数：0</button>
+<p>进入元素点选模式后再点按钮，应当选择元素，而不是增加计数。</p>
+</section>
+<p>确认标注后，点「添加到草稿」，检查图片、备注和本地文件来源；插件不会自动发送。</p>
+<small>测试用途：此页面没有模型请求、账号信息、磁盘读取或外部网络请求。关闭未添加的批注不会把内容加入草稿。</small>
+</main>
+<script>
+let count=0;
+document.getElementById('counter').addEventListener('click',function(){count+=1;this.textContent='普通点击计数：'+count});
+</script>
+</body>
+</html>

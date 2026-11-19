@@ -88,9 +88,20 @@ async function smoke(rootArgument) {
   assert.equal(typeof timeout?.get === 'function' ? timeout.get() : timeout, 15000, 'timeout-default-missing');
   const overflow = await standard.validate({ ...limits, subtitleRequestTimeoutMs: 2147483648 });
   assert.ok(Array.isArray(overflow.issues) && overflow.issues.length > 0, 'timeout-overflow-accepted');
+  const localDefaults = { localHtmlMaxBytes: 16777216, localHtmlMaxFiles: 64, localHtmlTimeoutMs: 15000 };
+  if (Object.hasOwn(valid.value, 'localHtmlMaxBytes')) {
+    for (const [field, expected] of Object.entries(localDefaults)) {
+      const actual = valid.value[field];
+      assert.equal(typeof actual?.get === 'function' ? actual.get() : actual, expected, 'local-default-missing');
+      const invalid = await standard.validate({ ...limits, [field]: 0 });
+      assert.ok(Array.isArray(invalid.issues) && invalid.issues.length > 0, 'zero-local-limit-accepted');
+    }
+    const localOverflow = await standard.validate({ ...limits, localHtmlTimeoutMs: 2147483648 });
+    assert.ok(Array.isArray(localOverflow.issues) && localOverflow.issues.length > 0, 'local-timeout-overflow-accepted');
+  }
   // No App/context/SDK is constructed. Host apply only gets the already parsed limits.
   host.apply(Object.freeze({}), valid.value);
-  console.log('PASS Host: independent ESM import without node_modules/SDK; name/apply/StandardSchema; three limits, zero rejections, timeout default and upper bound');
+  console.log('PASS Host: independent ESM import without node_modules/SDK; name/apply/StandardSchema; limit validation and available local HTML defaults, zero rejections, timer upper bounds');
 
   const client = await readFile(await internalFile(root, './lib/client.js'), 'utf8');
   for (const specifier of moduleSpecifiers(client)) {

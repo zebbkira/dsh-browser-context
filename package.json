@@ -15,7 +15,7 @@
   "files": ["lib/index.js", "lib/client.js", "cordis.patch.yml", "docs/validation-2026-11-14-standalone.md", "docs/preview/reference-menu.png", "docs/preview/reference-content.png", "screenshots.json", "README.md", "LICENSE", "NOTICE"],
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
-    "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-sidebar-right", "@deepseek-ai/dsh-api-workspace-controller", "@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-ui-settings"] }
+    "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-sidebar-right", "@deepseek-ai/dsh-api-workspace-controller", "@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-ui-settings", "@deepseek-ai/dsh-api-workspace-files", "@deepseek-ai/dsh-client-ui-context-menu", "@deepseek-ai/dsh-client-ui-sidebar-documentpreview"] }
   },
   "devDependencies": { "defuddle": "0.19.6" },
   "scripts": {

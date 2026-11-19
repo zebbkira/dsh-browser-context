@@ -23,13 +23,16 @@ export function ReferenceBrowserBody(props: ReferenceBrowserBodyProps): ReactNod
   const viewportId = useId()
   const state = useReferenceBrowserState(tab.id) ?? EMPTY_STATE
   const [edit, setEdit] = useState<{ url: string | undefined; text: string }>()
-  const draft = edit !== undefined && edit.url === state.url ? edit.text : state.url ?? ''
+  const draft = edit !== undefined && edit.url === state.url ? edit.text : state.localPath ?? state.url ?? ''
   const params = tab.navigation.params
   const initialUrl = params !== undefined && 'url' in params && typeof params.url === 'string' ? params.url : undefined
+  const initialLocalPath = params !== undefined && 'localFile' in params && params.localFile !== undefined ? params.localFile.path : undefined
+  const local = state.localPath !== undefined || state.url === undefined && initialLocalPath !== undefined
   // Native attachment needs this component's committed viewport, not a query into any stock Browser DOM.
   useLayoutEffect(() => mount({ tabId: tab.id, signal: tab.signal, viewportId, initialUrl,
+    ...(initialLocalPath === undefined ? {} : { initialLocal: { path: initialLocalPath } }),
     openRequested: url => { tab.actions.openTab('reference-browser', { params: { url }, revealIfOpened: false }) },
-  }), [mount, tab.id, tab.signal, tab.actions, viewportId, initialUrl])
+  }), [mount, tab.id, tab.signal, tab.actions, viewportId, initialUrl, initialLocalPath])
   const captureTab = useCallback<BrowserActionsOwnerProps['capture']>((kind, limits) => {
     if (tab.signal.aborted) return Promise.reject(new CaptureError('closed'))
     return capture(tab.id, kind, limits)
@@ -38,17 +41,18 @@ export function ReferenceBrowserBody(props: ReferenceBrowserBodyProps): ReactNod
     if (tab.signal.aborted) return Promise.reject(new CaptureError('closed'))
     return pickElement(tab.id, limits, AbortSignal.any([signal, tab.signal]), instruction)
   }, [pickElement, tab.id, tab.signal])
-  const submit = (event: FormEvent): void => { event.preventDefault(); load(tab.id, draft) }
+  const submit = (event: FormEvent): void => { event.preventDefault(); if (!local) load(tab.id, draft) }
   return <div className={css.root}>
     <form className={css.toolbar} onSubmit={submit}>
-      <input className={css.address} value={draft} aria-label={t('address')} placeholder={t('address')} spellCheck={false}
+      <input className={css.address} value={draft} readOnly={local} aria-label={t(local ? 'localAddress' : 'address')} placeholder={t('address')} spellCheck={false}
         onChange={event => { setEdit({ url: state.url, text: event.currentTarget.value }) }} />
-      <button className={css.tool} type="submit" aria-label={t('go')} title={t('go')}><IconLinkOutlineRegular /></button>
+      <button className={css.tool} type="submit" disabled={local} aria-label={t('go')} title={t('go')}><IconLinkOutlineRegular /></button>
       <button className={css.tool} type="button" aria-label={t('reload')} title={t('reload')}
-        disabled={state.url === undefined || state.error === 'desktop-only'} onClick={() => { reload(tab.id) }}><IconRefreshOutlineRegular /></button>
+        disabled={state.url === undefined && !local || state.error === 'desktop-only'} onClick={() => { reload(tab.id) }}><IconRefreshOutlineRegular /></button>
       {renderSlot('browserContext.actions', { available: state.available, capture: captureTab, pickElement: pickTab,
         source: state.available && state.url !== undefined
-          ? { tabId: tab.id, url: state.url, title: state.title, generation: state.generation } : undefined })}
+          ? { tabId: tab.id, url: state.url, title: state.title, generation: state.generation,
+              ...(state.localFile === undefined ? {} : { localFile: state.localFile }) } : undefined })}
     </form>
     {state.error !== undefined && <p className={css.notice} role="status">{t(`error.${state.error}`)}</p>}
     <div className={css.content} aria-busy={state.loading}>

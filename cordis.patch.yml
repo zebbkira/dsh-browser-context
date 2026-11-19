@@ -5,3 +5,6 @@
         maxTextBytes: 65536
         maxImageBytes: 10485760
         subtitleRequestTimeoutMs: 15000
+        localHtmlMaxBytes: 16777216
+        localHtmlMaxFiles: 64
+        localHtmlTimeoutMs: 15000

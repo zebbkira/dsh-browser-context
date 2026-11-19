@@ -16,6 +16,8 @@ import type { BrowserActionsOwnerProps } from './contract.ts'
 import { workspaceKey } from './workspace.ts'
 import { ReferenceBrowserBody, ReferenceBrowserTitle } from './View.tsx'
 import { en, zh } from './locales.ts'
+import type { LocalHtmlLimits, LocalHtmlRequest } from './local-html-types.ts'
+import { prepareLocalHtml } from '../readers/local-html.ts'
 
 export type { BrowserActionsOwnerProps, BrowserContextCapture, BrowserContextCaptureKind, BrowserContextCaptureLimits,
   BrowserContextCaptureError, BrowserContextCaptureErrorCode, BrowserContextSource } from './contract.ts'
@@ -28,7 +30,7 @@ const ID = 'dsh-browser-context.reference-browser'
 export interface BrowserInjected {
   readonly keyedHooks: { readonly referenceBrowserState: (key: string) => HostObservable<PageState> }
   /** @param request - committed own viewport and tab occurrence. @returns physical attachment cleanup. */
-  mount(request: { tabId: TabId; signal: AbortSignal; viewportId: string; initialUrl: string | undefined; openRequested: (url: string) => void }): () => void
+  mount(request: { tabId: TabId; signal: AbortSignal; viewportId: string; initialUrl: string | undefined; initialLocal?: LocalHtmlRequest; openRequested: (url: string) => void }): () => void
   /** @param tabId - owning tab. @param value - explicit address input. */
   load(tabId: TabId, value: string): void
   /** @param tabId - owning tab. */
@@ -38,14 +40,14 @@ export interface BrowserInjected {
 }
 
 declare module '@deepseek-ai/dsh-client-ui-sidebar-right/client' {
-  interface SidebarRightTabParamsMap { 'reference-browser': { readonly url?: string } }
+  interface SidebarRightTabParamsMap { 'reference-browser': { readonly url?: string; readonly localFile?: LocalHtmlRequest } }
 }
 
 /**
  * Register an additional page; the stock Browser kind and its components remain untouched.
  * @param ctx - apply-owned context with referenceBrowserInject services; all contributions unwind with its fiber.
  */
-export function registerReferenceBrowser(ctx: Context): void {
+export function registerReferenceBrowser(ctx: Context, readLocalLimits: () => LocalHtmlLimits): void {
   const bridge = browserBridge()
   const sessions = new Map<SessionId, { pages: Map<TabId, NativePage>; face: BrowserInjected }>()
   const endings = new Set<Promise<void>>()
@@ -69,14 +71,20 @@ export function registerReferenceBrowser(ctx: Context): void {
     const pageOf = (tabId: TabId): NativePage => {
       let page = pages.get(tabId)
       if (page === undefined) {
-        page = new NativePage(bridge, signal => workspaceKey(ctx.workspaces.list, sessionId, signal), window.location.origin)
+        page = new NativePage(bridge, signal => workspaceKey(ctx.workspaces.list, sessionId, signal), window.location.origin,
+          async (request, signal) => {
+            const limits = readLocalLimits()
+            const bundle = await prepareLocalHtml(sessionId, request.path,
+              (path, options, readSignal) => ctx.remote.workspaceFiles.readBytes(sessionId, path, options, readSignal), limits, signal)
+            return { bundle, limits }
+          })
         pages.set(tabId, page)
       }
       return page
     }
     const face: BrowserInjected = {
       keyedHooks: { referenceBrowserState: key => pageOf(key as TabId) },
-      mount: request => disposed ? () => {} : pageOf(request.tabId).mount(request.viewportId, request.signal, request.initialUrl, request.openRequested),
+      mount: request => disposed ? () => {} : pageOf(request.tabId).mount(request.viewportId, request.signal, request.initialUrl, request.openRequested, request.initialLocal),
       load: (tabId, value) => { if (!disposed) pages.get(tabId)?.loadUrl(value) },
       reload: tabId => { if (!disposed) pages.get(tabId)?.reload() },
       capture: (tabId, kind, limits) => {

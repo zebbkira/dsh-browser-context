@@ -10,21 +10,24 @@ import { admit, ReferenceError } from './reference.ts'
 import type { Limits, Reference } from './reference.ts'
 import { en, zh } from './locales.ts'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
-import { resolveLimits } from './config.ts'
+import { resolveLimits, resolveLocalHtmlLimits } from './config.ts'
+import type { HostSettings } from './config.ts'
+import { localHtmlActionsInject, registerLocalHtmlActions } from './local-html-actions.ts'
 import { registerReferenceBrowser, referenceBrowserInject } from '../browser/index.ts'
 
-export const inject = [...referenceBrowserInject, 'conversation', 'sessions', 'configForms']
+export const inject = [...new Set([...referenceBrowserInject, ...localHtmlActionsInject, 'conversation', 'sessions', 'configForms'])]
 /** Injection carries only plain configuration and scoped callbacks. */
 export interface Injected {
-  readonly hooks: { readonly config: ConfigForm<Limits> }
+  readonly hooks: { readonly config: ConfigForm<HostSettings> }
   readLimits(): Limits
   commit(reference: Reference, actions: InputActions, span: TokenSpan, limits: Limits): void
 }
 
 /** @param ctx - plugin lifetime owner; limits come from its authoritative Host settings form. */
 export function apply(ctx: Context): void {
-  registerReferenceBrowser(ctx)
-  const form = ctx.configForms.get<Limits>('dsh-browser-context')
+  const form = ctx.configForms.get<HostSettings>('dsh-browser-context')
+  registerReferenceBrowser(ctx, () => resolveLocalHtmlLimits(form.getSnapshot()))
+  registerLocalHtmlActions(ctx)
   const store = createRecoveryStore()
   let disposed = false
   ctx.effect(() => () => { disposed = true }, 'browser-context.lifetime')
