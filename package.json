@@ -1,9 +1,9 @@
 {
   "name": "dsh-browser-context",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "DSH Desktop reference browser for articles, WeCom selections, accessible Bilibili subtitles and screenshots, with compact source quotes",
+  "description": "DSH Desktop reference browser for web and local HTML articles, WeCom selections, Bilibili subtitles, screenshots and element annotations",
   "repository": { "type": "git", "url": "https://github.com/zebbkira/dsh-browser-context.git" },
   "homepage": "https://github.com/zebbkira/dsh-browser-context#readme",
   "bugs": { "url": "https://github.com/zebbkira/dsh-browser-context/issues" },

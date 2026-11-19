@@ -23,4 +23,6 @@ jobs:
           mkdir -p dist
           npm pack --ignore-scripts --pack-destination dist
       - name: Verify archive and cold module imports
-        run: python scripts/verify-package.py dist/dsh-browser-context-0.2.0.tgz --node node
+        run: |
+          archive=$(node -p "'dist/dsh-browser-context-' + require('./package.json').version + '.tgz'")
+          python scripts/verify-package.py "$archive" --node node

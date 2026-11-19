@@ -15,19 +15,19 @@
 在能使用 `dsh` 命令的终端执行：
 
 ```sh
-dsh plugin --profile desktop add https://github.com/zebbkira/dsh-browser-context/releases/download/v0.2.0/dsh-browser-context-0.2.0.tgz
+dsh plugin --profile desktop add https://github.com/zebbkira/dsh-browser-context/releases/download/v0.3.0/dsh-browser-context-0.3.0.tgz
 ```
 
 如果实际 profile 不是 `desktop`，替换该名称。
 
 ### 下载后安装
 
-打开 [v0.2.0 发布页](https://github.com/zebbkira/dsh-browser-context/releases/tag/v0.2.0)，下载 `dsh-browser-context-0.2.0.tgz`。`Source code (zip)` 和 `Source code (tar.gz)` 是 GitHub 自动生成的源码归档，不是这里推荐的插件包。
+打开 [v0.3.0 发布页](https://github.com/zebbkira/dsh-browser-context/releases/tag/v0.3.0)，下载 `dsh-browser-context-0.3.0.tgz`。`Source code (zip)` 和 `Source code (tar.gz)` 是 GitHub 自动生成的源码归档，不是这里推荐的插件包。
 
 可同时下载 `SHA256SUMS` 核对安装包的 SHA-256。然后在终端进入下载目录，执行：
 
 ```sh
-dsh plugin --profile desktop add ./dsh-browser-context-0.2.0.tgz
+dsh plugin --profile desktop add ./dsh-browser-context-0.3.0.tgz
 ```
 
 如果所用插件管理器支持导入本地包，也可选择这个 `.tgz` 文件安装。
@@ -36,7 +36,7 @@ dsh plugin --profile desktop add ./dsh-browser-context-0.2.0.tgz
 
 ## 安装完成后
 
-1. 确认安装命令成功，包版本为 0.2.0，且已登记为目标 profile 的 bundle。下载成功不等于当前运行中的桌面已加载插件。
+1. 确认安装命令成功，包版本为 0.3.0，且已登记为目标 profile 的 bundle。下载成功不等于当前运行中的桌面已加载插件。
 2. 保存正在编辑的内容，从系统托盘彻底退出 DSH，再重新打开。只关闭窗口可能留在后台，只刷新页面不能代替宿主重启。
 3. 在 DSH 右侧栏的新建页面菜单中选择「引用浏览器」，打开资料网址，再点击地址栏旁的「引用」。原有的「浏览器」不是本插件入口。
 4. 确认内容出现在当前对话输入框，检查后自行发送。需要网页登录时，由用户在引用浏览器里按站点正常登录。
@@ -51,6 +51,6 @@ dsh plugin --profile desktop add ./dsh-browser-context-0.2.0.tgz
 
 ## 更新与问题反馈
 
-以后更新时使用对应 Release 的安装包，按同样流程安装并重新启动 DSH。预发布版使用固定版本下载链接，不依赖 GitHub 的 Latest 入口。
+以后更新时使用对应 Release 的安装包，按同样流程安装并重新启动 DSH。v0.3.0 是正式稳定版；本说明使用固定版本下载链接，便于确认实际安装内容。
 
-本说明不改变已发布的 v0.2.0 附件或校验值。安装异常请到 [Issues](https://github.com/zebbkira/dsh-browser-context/issues) 提供 DSH 版本、安装步骤和不含凭据的错误提示。
+此前的 v0.2.0 预发布附件和校验值保持不变。安装异常请到 [Issues](https://github.com/zebbkira/dsh-browser-context/issues) 提供 DSH 版本、安装步骤和不含凭据的错误提示。

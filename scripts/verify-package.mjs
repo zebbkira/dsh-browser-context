@@ -88,7 +88,11 @@ async function smoke(rootArgument) {
   assert.equal(typeof timeout?.get === 'function' ? timeout.get() : timeout, 15000, 'timeout-default-missing');
   const overflow = await standard.validate({ ...limits, subtitleRequestTimeoutMs: 2147483648 });
   assert.ok(Array.isArray(overflow.issues) && overflow.issues.length > 0, 'timeout-overflow-accepted');
+  const manifest = JSON.parse(await readFile(await internalFile(root, './package.json'), 'utf8'));
   const localDefaults = { localHtmlMaxBytes: 16777216, localHtmlMaxFiles: 64, localHtmlTimeoutMs: 15000 };
+  if (manifest.version !== '0.2.0') {
+    for (const field of Object.keys(localDefaults)) assert.ok(Object.hasOwn(valid.value, field), 'required-local-default-missing');
+  }
   if (Object.hasOwn(valid.value, 'localHtmlMaxBytes')) {
     for (const [field, expected] of Object.entries(localDefaults)) {
       const actual = valid.value[field];

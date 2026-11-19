@@ -2,7 +2,7 @@
 
 ## 摘要
 
-本仓库包含一份 [收录条目草稿](../marketplace/zebbkira__dsh-browser-context.yml)，不代表已向 awesome-dsh-plugin 投稿或已被收录。代码、预发布 Release 与目录收录分别维护；发布安装包不会自动创建上游 PR。
+本仓库包含一份 [条目参考](../marketplace/zebbkira__dsh-browser-context.yml)，上游目录的条目和评审状态单独维护，不代表已被收录。代码、GitHub Release 与目录收录分别维护；发布安装包不会自动创建或更新上游 PR。
 
 本页依据 [awesome-dsh-plugin 贡献指南](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md) 整理；真正投稿前须复核当时的规则。
 
@@ -35,9 +35,9 @@
 
 本条目预备使用固定地址：
 
-`https://github.com/zebbkira/dsh-browser-context/releases/download/v0.2.0/dsh-browser-context-0.2.0.tgz`
+`https://github.com/zebbkira/dsh-browser-context/releases/download/v0.3.0/dsh-browser-context-0.3.0.tgz`
 
-维护者须先完成 v0.2.0 预发布、上传安装包和校验文件，并确认公开下载与校验结果，再将该地址用于任何收录提交。草稿中的地址不是附件已经存在的证明。预发布不使用 `latest/download`；固定 tag 也避免不同版本共用一个漂移地址。
+维护者须先完成 v0.3.0 正式发布、上传安装包和校验文件，并确认公开下载与校验结果，再将该地址用于目录更新。参考文件中的地址不是附件已经存在的证明；固定 tag 避免不同版本共用一个漂移地址。
 
 上游要求 tarball 为 GitHub Release 托管的 HTTPS `.tgz`。若日后使用 `latest/download`，资产名必须固定且不带版本；带版本的文件名应配固定 tag。若另行发布 npm 包，其 `repository` 必须回指本仓库；目录自动发现 npm 映射，不能在条目中手写 `npm:`。
 
