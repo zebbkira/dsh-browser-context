@@ -217,7 +217,7 @@ export function BrowserActions(props: Props) {
         </span>
       </Tooltip>}>
       <MenuItemButton disabled={!available || !configReady || busy} onSelect={() => { void begin('selection') }}>{t(source !== undefined && isWecomDocument(source.url) ? 'wecomSelection' : 'selection')}</MenuItemButton>
-      {source?.localFile === undefined && <MenuItemButton disabled={!available || !configReady || busy} onSelect={() => { void begin('article') }}>{t(source !== undefined && isWecomDocument(source.url) ? 'document' : source !== undefined && isBilibiliVideo(source.url) ? 'video' : 'article')}</MenuItemButton>}
+      <MenuItemButton disabled={!available || !configReady || busy} onSelect={() => { void begin('article') }}>{t(source !== undefined && isWecomDocument(source.url) ? 'document' : source !== undefined && isBilibiliVideo(source.url) ? 'video' : 'article')}</MenuItemButton>
       <MenuItemButton disabled={!available || !configReady || busy} onSelect={openPaste}>{t('paste')}</MenuItemButton>
       <MenuItemButton disabled={!available || !configReady || busy} onSelect={() => { void begin('viewport') }}>{t('viewport')}</MenuItemButton>
       <MenuItemButton disabled={!available || !configReady || busy} onSelect={() => { void beginAnnotation('screenshot') }}>{t('annotate')}</MenuItemButton>

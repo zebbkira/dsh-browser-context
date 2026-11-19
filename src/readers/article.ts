@@ -60,12 +60,17 @@ function readArticle(Parser: typeof Defuddle, maxBytes: number): object {
   return capture
 }
 
-/** @param maxBytes - validated complete result budget. @returns a fixed local guest extraction script. */
-export function articleScript(maxBytes: number): string {
-  return `(() => {
+/** @returns fixed parser-function source shared by normal guests and opaque local HTML frames; never supplied by page messages. */
+export function articleReaderSource(): string {
+  return `(function(maxBytes) {
     const module = { exports: {} }; const exports = module.exports;
     const console = { log() {}, info() {}, warn() {}, error() {}, debug() {}, time() {}, timeEnd() {} };
     ${__BROWSER_CONTEXT_DEFUDDLE__}
-    return (${readArticle.toString()})(module.exports, ${JSON.stringify(maxBytes)});
-  })()`
+    return (${readArticle.toString()})(module.exports, maxBytes);
+  })`
+}
+
+/** @param maxBytes - validated complete result budget. @returns a fixed local guest extraction script. */
+export function articleScript(maxBytes: number): string {
+  return `(${articleReaderSource()})(${JSON.stringify(maxBytes)})`
 }

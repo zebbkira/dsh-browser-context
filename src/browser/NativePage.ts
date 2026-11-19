@@ -302,14 +302,15 @@ export class NativePage {
         if (reply.url !== state.url) throw new CaptureError('changed')
         result = { ...reply }
       } else if (kind === 'article') {
-        if (state.localFile !== undefined) throw new CaptureError('unsupported')
         if (isWecomDocument(state.url) || isBilibiliVideo(state.url)) throw new CaptureError('unsupported')
-        const reply = await element.executeJavaScript(articleScript(limits.maxBytes))
+        const reply = local !== undefined && state.localFile !== undefined
+          ? await this.localCommand(local, { kind: 'article', maxBytes: limits.maxBytes })
+          : await element.executeJavaScript(articleScript(limits.maxBytes))
         assertCurrent()
         if (typeof reply !== 'object' || reply === null) throw new CaptureError('failed')
         if ('code' in reply && (reply.code === 'no-article' || reply.code === 'too-large')) throw new CaptureError(reply.code)
         if (!('kind' in reply) || reply.kind !== 'article' || !('format' in reply) || reply.format !== 'markdown'
-          || !('url' in reply) || reply.url !== state.url || !('title' in reply) || typeof reply.title !== 'string'
+          || state.localFile === undefined && (!('url' in reply) || reply.url !== state.url) || !('title' in reply) || typeof reply.title !== 'string'
           || !('text' in reply) || typeof reply.text !== 'string') throw new CaptureError('failed')
         if (reply.text.trim().length === 0) throw new CaptureError('no-article')
         result = { kind, url: state.url, title: reply.title, text: reply.text, format: 'markdown' }

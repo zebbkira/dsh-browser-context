@@ -56,6 +56,7 @@ function fixture(loader: LocalHtmlLoader = async () => prepared) {
       if (command.kind === 'bootstrap') state.documentId = command.documentId
       if (command.kind === 'bootstrap' || command.kind === 'status') return { documentId: state.documentId, ready: true, frameGeneration: state.frameGeneration }
       if (command.kind === 'selection') return { text: 'Authorized selection' }
+      if (command.kind === 'article') return { kind: 'article', title: 'Rendered article', text: '# Article body', format: 'markdown' }
       if (command.kind === 'pick' || command.kind === 'check') return picked
       return true
     }
@@ -121,7 +122,9 @@ describe('owned local HTML guest lifecycle', () => {
     expect(commands).toEqual(['bootstrap', 'status', 'selection', 'status'])
     await expect(h.page.capture('viewport', { maxBytes: 65536 })).resolves.toMatchObject({ kind: 'viewport', localFile: prepared.bundle.source })
     expect(guest.capturePage).toHaveBeenCalledTimes(1)
-    await expect(h.page.capture('article', { maxBytes: 65536 })).rejects.toMatchObject({ code: 'unsupported' })
+    await expect(h.page.capture('article', { maxBytes: 65536 })).resolves.toMatchObject({
+      kind: 'article', format: 'markdown', text: '# Article body', url: prepared.bundle.source.resourceAddress, localFile: prepared.bundle.source,
+    })
     expect(guest.state.url).toMatch(/^about:blank#local-lease-/u)
   })
 

@@ -44,6 +44,19 @@ function choose(label: string) {
 }
 
 describe('Browser reference menu', () => {
+  it('offers the same article action for a local HTML file without requiring a selection', async () => {
+    const f = fixture()
+    const localFile = { path: 'E:/demo/index.html', resourceAddress: 'dsh-resource://file/session/one/E:/demo/index.html', version: 'local-v1' }
+    const source = { ...f.props.source!, url: localFile.resourceAddress, localFile }
+    vi.mocked(f.props.capture).mockResolvedValueOnce({ kind: 'article', url: source.url, title: 'Local article',
+      text: '# 本地正文\n\n不需要预先选中文字。', format: 'markdown', localFile })
+    render(<BrowserActions {...f.props} source={source} />); choose(zh.article)
+    await waitFor(() => expect(f.commit).toHaveBeenCalledTimes(1))
+    expect(f.props.capture).toHaveBeenCalledExactlyOnceWith('article', { maxBytes: 65536 })
+    expect(f.commit.mock.calls[0]![0].capture).toMatchObject({ kind: 'article', format: 'markdown', localFile })
+    expect(f.commit.mock.calls[0]![0].source).toContain('Local HTML file snapshot')
+    expect(f.inputActions.submit).not.toHaveBeenCalled()
+  })
   it('freezes the native selection end rather than replacing selected draft text', async () => {
     const f = fixture(); const pending = deferred<typeof selected>()
     f.inputActions.captureInsertion.mockReturnValue({ start: 1, end: 3, draftRev: 4 })
