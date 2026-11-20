@@ -1,6 +1,6 @@
 <h1 align="center">引用浏览器</h1>
 <p align="center">让 DSH 读你正在看的资料，再一起总结、思考和修改。</p>
-<p align="center"><a href="https://github.com/zebbkira/dsh-browser-context/releases/tag/v0.3.0">下载正式版</a> · <a href="#安装">安装</a> · <a href="#怎么用">怎么用</a></p>
+<p align="center"><a href="https://github.com/zebbkira/dsh-browser-context/releases/tag/v0.3.1">下载正式版</a> · <a href="#安装">安装</a> · <a href="#怎么用">怎么用</a></p>
 
 看到一篇文章、一份企微文档，或者一个 B站视频，想让 DSH 帮你分析，却不想来回复制粘贴？做好了一个 HTML 页面，想圈出某个地方告诉 Agent 怎么改？
 
@@ -22,17 +22,17 @@
 
 ## 安装
 
-当前正式版为 **v0.3.0**，用于 **DSH 桌面版**，已在 **0.2.2-rc.1** 上验证。安装包已经构建好，不需要自己编译或填写额外配置。
+当前正式版为 **v0.3.1**，用于 **DSH 桌面版**，已在 **0.2.2-rc.1** 上验证。安装包已经构建好，不需要自己编译或填写额外配置。
 
 ### 让 Agent 帮你装
 
 如果不想处理安装命令，直接把下面这句话发给 DSH 中能使用本机终端的 Agent：
 
-> 请帮我安装或更新「引用浏览器」插件：https://github.com/zebbkira/dsh-browser-context 。先阅读安装说明，使用 Release 中的 v0.3.0 安装包，安装到我实际使用的 DSH 环境，保留原有配置。装好后告诉我怎么重启、从哪里打开，不要直接替我关闭 DSH。
+> 请帮我安装或更新「引用浏览器」插件：https://github.com/zebbkira/dsh-browser-context 。先阅读安装说明，使用 Release 中的 v0.3.1 安装包，安装到我实际使用的 DSH 环境，保留原有配置。装好后告诉我怎么重启、从哪里打开，不要直接替我关闭 DSH。
 
 ### 自己安装
 
-在 [v0.3.0 下载页](https://github.com/zebbkira/dsh-browser-context/releases/tag/v0.3.0) 下载 **dsh-browser-context-0.3.0.tgz**，它才是插件安装包，不是页面下方的 Source code 源码压缩包。
+在 [v0.3.1 下载页](https://github.com/zebbkira/dsh-browser-context/releases/tag/v0.3.1) 下载 **dsh-browser-context-0.3.0.tgz**，它才是插件安装包，不是页面下方的 Source code 源码压缩包。
 
 <details>
 <summary>展开手动安装命令</summary>
@@ -40,7 +40,7 @@
 在终端进入下载目录，执行：
 
 ```sh
-dsh plugin --profile desktop add ./dsh-browser-context-0.3.0.tgz
+dsh plugin --profile desktop add ./dsh-browser-context-0.3.1.tgz
 ```
 
 上面使用常见的桌面环境 `desktop`。如果你使用其他 profile，或找不到 `dsh` 命令，请看 [详细安装说明](https://github.com/zebbkira/dsh-browser-context/blob/main/docs/install.md)，也可以让 Agent 按这份说明安装。
