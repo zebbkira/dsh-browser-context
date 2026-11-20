@@ -1,5 +1,5 @@
 # 发布元数据参考；上游目录条目和评审状态单独维护，不代表已收录。
-# 须确认 v0.3.0 正式附件已上传且校验通过，再将此 tarball 地址用于上游更新。
+# 须确认 v0.3.1 附件已上传且校验通过，再将此 tarball 地址用于上游更新。
 # 仓库须在 2026-11-16T14:08:12Z 创建满 1 天；此文件不安排自动投稿。
 url: https://github.com/zebbkira/dsh-browser-context
 name: zebbkira/dsh-browser-context
@@ -7,4 +7,4 @@ category: browser
 description:
   en: 'Bring web and local HTML articles, WeCom selections, Bilibili subtitles, screenshots and annotations into a DSH Desktop draft without sending automatically.'
   zh: '在 DSH 中引用网页和本地 HTML 正文、企微选区、B站已有字幕，或添加截图与批注，不自动发送。'
-tarball: https://github.com/zebbkira/dsh-browser-context/releases/download/v0.3.0/dsh-browser-context-0.3.0.tgz
+tarball: https://github.com/zebbkira/dsh-browser-context/releases/download/v0.3.1/dsh-browser-context-0.3.1.tgz

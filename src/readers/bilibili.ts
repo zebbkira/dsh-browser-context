@@ -1,5 +1,5 @@
 /** Read-only Bilibili page information, browser cues, and optional authorized site subtitle requests. */
-import { enrichBilibiliSubtitles } from './bilibili-subtitles.ts'
+import { enrichBilibiliSubtitles, md5Hex, wbiMixinKey, wbiSignedQuery } from './bilibili-subtitles.ts'
 import type { VideoSubtitleDiagnostic } from '../browser/contract.ts'
 
 /** Reasons an authorized subtitle request did not yield readable subtitle content. */
@@ -105,12 +105,12 @@ function readBilibili(maxBytes: number): BilibiliReply {
   return new TextEncoder().encode(JSON.stringify(reply)).byteLength <= maxBytes ? reply : { code: 'too-large' }
 }
 
-/** @param maxBytes - Complete UTF-8 JSON budget; undersized budgets reject before reading the DOM. @param subtitleRequestTimeoutMs - Explicit authorization for bounded normal-site subtitle requests; omitted keeps synchronous DOM-only behavior. @returns A fixed self-contained script without player interaction or document mutation; authorized requests use a total timeout and at most three requests. */
+/** @param maxBytes - Complete UTF-8 JSON budget; undersized budgets reject before reading the DOM. @param subtitleRequestTimeoutMs - Explicit authorization for bounded normal-site subtitle requests; omitted keeps synchronous DOM-only behavior. @returns A fixed self-contained script without player interaction or document mutation; authorized requests use a total timeout and at most five requests: video identity, signing keys, signed player info, and at most two subtitle files. */
 export function bilibiliVideoScript(maxBytes: number, subtitleRequestTimeoutMs?: number): string {
   const localBudget = subtitleRequestTimeoutMs !== undefined && maxBytes >= 20 ? Number.MAX_SAFE_INTEGER : maxBytes
   const local = `(${readBilibili.toString()})(${JSON.stringify(localBudget)})`
   return subtitleRequestTimeoutMs === undefined ? local
-    : `(${enrichBilibiliSubtitles.toString()})(${local},${JSON.stringify(maxBytes)},${JSON.stringify(subtitleRequestTimeoutMs)})`
+    : `(${enrichBilibiliSubtitles.toString()})(${local},${JSON.stringify(maxBytes)},${JSON.stringify(subtitleRequestTimeoutMs)},{md5:${md5Hex.toString()},mixinKey:${wbiMixinKey.toString()},signedQuery:${wbiSignedQuery.toString()}})`
 }
 
 /** @param reply - Unknown IPC JSON string or decoded value. @returns Validated owned fields only; malformed replies throw a fixed content-free error. */

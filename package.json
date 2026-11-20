@@ -1,6 +1,6 @@
 {
   "name": "dsh-browser-context",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "DSH Desktop reference browser for web and local HTML articles, WeCom selections, Bilibili subtitles, screenshots and element annotations",
