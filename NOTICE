@@ -1,3 +1,9 @@
+The promotional video (docs/promo.mp4) uses the following third-party material:
+- Music and sound effects from freesound.org, dedicated to the public domain via CC0 1.0.
+  Individual sounds are listed in the video project's audio manifest.
+- Two still frames from a publicly available bilibili video (BV1hxs86PEXM by 盒子姬),
+  quoted briefly for demonstrating the subtitle-reference feature.
+
 The native guest carrier and capture lifecycle incorporate small portions of DeepSeek Harness.
 Copyright (c) 2026 DeepSeek
 

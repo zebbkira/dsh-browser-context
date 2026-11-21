@@ -2,6 +2,8 @@
 <p align="center">让 DSH 读你正在看的资料，再一起总结、思考和修改。</p>
 <p align="center"><a href="https://github.com/zebbkira/dsh-browser-context/releases/tag/v0.3.1">下载正式版</a> · <a href="#安装">安装</a> · <a href="#怎么用">怎么用</a></p>
 
+<p align="center"><a href="docs/promo.mp4"><img src="docs/promo-poster.jpg" alt="引用浏览器宣传片：看到什么，引用什么" width="640"></a><br><sub>91 秒宣传片：正文引用 · 圈画复刻 · 视频字幕（<a href="docs/promo.mp4">点击播放</a>）</sub></p>
+
 看到一篇文章、一份企微文档，或者一个 B站视频，想让 DSH 帮你分析，却不想来回复制粘贴？做好了一个 HTML 页面，想圈出某个地方告诉 Agent 怎么改？
 
 **引用浏览器让你在 DSH 的同一个窗口里打开资料，把文字、截图和批注加入对话，再接着提问。** 不只是贴一个链接，也不用把长文全堆在输入框里。
